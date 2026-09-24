@@ -48,6 +48,28 @@ export type {
   RunStateContinuity,
   RunWorkItem,
 } from "./runStateCapsule.js";
+export {
+  assertChildTaskPredecessor,
+  canonicalChildTask,
+  childTaskSha256,
+  createChildTask,
+  parseChildTask,
+  resolveChildTaskCapabilityAuthority,
+  sealChildTask,
+  serializeChildTask,
+  transitionChildTask,
+} from "./childTaskLifecycle.js";
+export type {
+  ChildTaskCapabilityDecision,
+  ChildTaskCapabilityReason,
+  ChildTaskContinuity,
+  ChildTaskEnvelope,
+  ChildTaskRecord,
+  ChildTaskStatus,
+  ChildTaskTransition,
+  ChildTaskTransitionKind,
+  CreateChildTaskInput,
+} from "./childTaskLifecycle.js";
 export type {
   BrowserEvidencePolicy,
   BrowserEvidenceReceipt,
