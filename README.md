@@ -13,6 +13,7 @@ Implemented lanes:
 - **P5 — persistent child-task lifecycle:** preserve subordinate task identity/state across failure and resume with fixed, non-widening delegated authority.
 - **P6 — workspace Time Travel:** capture immutable content-addressed snapshots, deterministic diffs, governed restore, and bounded history maintenance outside project Git.
 - **P7 — loop breaker + bounded repair:** fingerprint repeated failures, stop bounded loops, and optionally perform syntax-only tool-call repair without inventing semantics or authority.
+- **R1 — OpenCodeReview adapter:** bind OCR Delegation Mode into deterministic review planning, mandatory coverage, P5 reviewer/reflection specs, and a separately authorized P6-backed fix boundary.
 
 See [`BUILD_LIST.md`](./BUILD_LIST.md) for the canonical roadmap.
 
@@ -31,3 +32,5 @@ Delegation can only narrow authority.
 Workspace history never lives inside or rewrites project Git.
 
 Loop breakers may halt work as a safety invariant; bounded repair requires explicit authority and never invents semantics or authority.
+
+Review inspection never implies review fixes, and external review engines never receive sovereign runtime authority.

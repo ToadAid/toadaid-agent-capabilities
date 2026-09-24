@@ -56,15 +56,17 @@ Checkbox law: mark an item complete only when the implementation is landed on ca
   - exact tool-call shape validation with recursively frozen plain JSON arguments
   - semantics, missing fields, and authority are never repaired or inferred
 
-## Next integration cut
+## Integration lane
 
-- [ ] **R1 — OpenCodeReview adapter**
-  - deterministic review surface and semantic grouping
-  - mandatory review coverage accounting
-  - `review:inspect` authority separate from `review:fix`
-  - bounded reviewer/reflection children through P5
-  - P6 snapshot before authorized fixes + deterministic diff after
-  - capability-policy binding and structured review evidence/receipts
+- [x] **R1 — OpenCodeReview adapter**
+  - OCR Delegation Mode schema-v1 preview/rule adapter; no OCR-managed LLM required
+  - argv-only command construction; no shell-string authority
+  - deterministic review surface and bounded rule/diff-size batching
+  - mandatory `(path, status)` review coverage accounting
+  - `review:inspect` and `review:fix` installed separately, both BLOCK by default
+  - P5-ready reviewer/reflection child specs delegate only `review:inspect`
+  - P6 snapshot before authorized fix + exact snapshot-bound diff after
+  - structured review, reflection, and fix receipts
 
 ## Remaining capability lane
 
@@ -92,6 +94,7 @@ Checkbox law: mark an item complete only when the implementation is landed on ca
 - Delegation can only narrow authority; it can never widen it.
 - Workspace history is external to project Git and restore requires separate authority.
 - Loop breakers may halt without authority; repair may fix syntax only and never invent semantics or authority.
+- Review inspection never implies review fixes; external review engines are deterministic evidence providers, not sovereign runtimes.
 - Shared infrastructure stays provider/model neutral.
 - Prefer useful vertical capability cuts over framework ceremony.
 - Live economic authority remains outside this repository unless explicitly introduced through a separate governed boundary.
