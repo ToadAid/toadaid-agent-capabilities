@@ -32,14 +32,25 @@ test("agent request cannot grant itself an origin", async () => {
   );
 });
 
-test("captures bounded browser evidence without input values", async (t) => {
+test("captures bounded browser evidence without input values or write methods", async (t) => {
   const artifactRoot = await mkdtemp(join(tmpdir(), "toadaid-browser-evidence-"));
   t.after(async () => {
     await rm(artifactRoot, { recursive: true, force: true });
   });
 
+  let postAttempts = 0;
   const server = createServer((request, response) => {
-    if (request.url === "/") {
+    const origin = `http://${request.headers.host}`;
+    const url = new URL(request.url ?? "/", origin);
+
+    if (request.method === "POST") {
+      postAttempts += 1;
+      response.writeHead(204);
+      response.end();
+      return;
+    }
+
+    if (url.pathname === "/") {
       response.writeHead(200, { "content-type": "text/html; charset=utf-8" });
       response.end(`<!doctype html>
         <html>
@@ -50,6 +61,7 @@ test("captures bounded browser evidence without input values", async (t) => {
             <input name="query" placeholder="Search" value="should-not-be-captured">
             <a href="/next?token=must-not-persist">Next</a>
             <img src="http://127.0.0.1:9/private.png" alt="blocked">
+            <script>fetch('/mutate', {method: 'POST', body: 'must-not-send'}).catch(() => {})</script>
           </body>
         </html>`);
       return;
@@ -71,7 +83,7 @@ test("captures bounded browser evidence without input values", async (t) => {
   const origin = `http://127.0.0.1:${address.port}`;
 
   const receipt = await captureBrowserEvidence(
-    { url: `${origin}/` },
+    { url: `${origin}/?session=must-not-persist#fragment` },
     {
       allowedTopLevelOrigins: [origin],
       maxDomChars: 5_000,
@@ -87,14 +99,22 @@ test("captures bounded browser evidence without input values", async (t) => {
   assert.equal(receipt.page.httpStatus, 200);
   assert.equal(receipt.page.title, "Frog Evidence");
   assert.equal(receipt.capturedAt, "2026-09-24T12:00:00.000Z");
+  assert.equal(receipt.request.url, `${origin}/`);
+  assert.equal(receipt.page.requestedUrl, `${origin}/`);
   assert.equal(receipt.dom.headings[0]?.text, "Browser Evidence");
   assert.match(receipt.dom.textExcerpt, /frog can observe rendered HTML/);
   assert.ok(receipt.network.blockedOrigins.includes("http://127.0.0.1:9"));
+  assert.ok(receipt.network.blockedHttpMethods.includes("POST"));
+  assert.equal(postAttempts, 0);
 
   const serializedInteractive = JSON.stringify(receipt.dom.interactiveElements);
   assert.doesNotMatch(serializedInteractive, /should-not-be-captured/);
   assert.doesNotMatch(serializedInteractive, /must-not-persist/);
   assert.match(serializedInteractive, /Search/);
+
+  const serializedReceipt = JSON.stringify(receipt);
+  assert.doesNotMatch(serializedReceipt, /session=must-not-persist/);
+  assert.doesNotMatch(serializedReceipt, /fragment/);
 
   const screenshotPath = join(artifactRoot, receipt.screenshot.relativePath);
   const screenshot = await readFile(screenshotPath);

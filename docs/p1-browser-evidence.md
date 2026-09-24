@@ -14,16 +14,18 @@ An agent therefore cannot grant itself another network origin or choose an arbit
 
 - HTTP(S) navigation only.
 - Exact top-level origin allowlist.
+- Resource-origin authority does not grant navigation authority.
 - Cross-origin resources require an explicit resource-origin allowlist entry.
+- Browser-originated HTTP requests are limited to `GET` and `HEAD`; attempted write methods are blocked and recorded.
 - Service workers are blocked so routed requests cannot bypass the HTTP request policy.
-- WebSocket connections are blocked in P1 and recorded by origin.
+- WebSocket connections are blocked and recorded by origin.
 - Downloads are disabled.
 - Browser context is fresh and non-persistent.
 - DOM evidence is bounded by policy.
 - Input values are not collected.
-- Persisted anchor hrefs omit query strings and fragments.
+- Persisted request/final URLs and anchor hrefs omit query strings and fragments.
 - Screenshots are generated under `<artifactRoot>/browser/` with runtime-generated UUID names.
-- Receipts include screenshot SHA-256, page status/title, policy, DOM evidence, and blocked network origins.
+- Receipts include screenshot SHA-256, page status/title, policy, DOM evidence, blocked network origins, and blocked HTTP methods.
 
 ## Non-authority
 
@@ -31,6 +33,6 @@ P1 grants no shell execution, repository mutation, wallet signing, transaction e
 
 ## Security boundary / known P1 limit
 
-Exact-origin routing is not DNS pinning. P1 does not yet defend an embedding host against DNS-rebinding behavior from an otherwise operator-approved hostname. Until a later network-hardening cut adds address-resolution policy, treat P1 as a capability to run inside the agent sandbox and do not approve untrusted arbitrary origins from a privileged host network.
+Exact-origin routing is not DNS pinning. P1 does not yet defend an embedding host against DNS-rebinding behavior from an otherwise operator-approved hostname. Until a later network-hardening cut adds address-resolution policy, run this capability inside the agent sandbox and do not approve untrusted arbitrary origins from a privileged host network.
 
-This limitation is explicit rather than hidden behind the word "sandboxed".
+`GET`/`HEAD` enforcement prevents ordinary browser write methods, but an incorrectly designed remote service can still attach side effects to a `GET`. Origin approval therefore remains an authority decision.

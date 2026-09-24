@@ -1,8 +1,14 @@
-import { createHash, randomUUID } from "node:crypto";
-import { mkdir, readFile } from "node:fs/promises";
-import { join, relative, resolve, sep } from "node:path";
+import { randomUUID } from "node:crypto";
 import { chromium } from "playwright-chromium";
 
+import {
+  collectDomEvidence,
+  installBrowserNetworkGuard,
+  networkEvidence,
+  parseAuthorizedHttpUrl,
+  persistedHttpUrl,
+  persistScreenshot,
+} from "./browserRuntime.js";
 import type {
   BrowserEvidencePolicy,
   BrowserEvidenceReceipt,
@@ -17,9 +23,8 @@ const DEFAULT_MAX_DOM_CHARS = 20_000;
 const MAX_DOM_CHARS = 100_000;
 const DEFAULT_MAX_INTERACTIVE_ELEMENTS = 100;
 const MAX_INTERACTIVE_ELEMENTS = 500;
-const MAX_HEADINGS = 50;
 
-function exactInteger(
+export function exactInteger(
   value: number | undefined,
   fallback: number,
   minimum: number,
@@ -88,28 +93,6 @@ export function normalizeBrowserEvidencePolicy(
   };
 }
 
-function assertedRequestedUrl(
-  requestedUrl: string,
-  policy: NormalizedBrowserEvidencePolicy,
-): URL {
-  let parsed: URL;
-  try {
-    parsed = new URL(requestedUrl);
-  } catch {
-    throw new TypeError("request.url must be a valid absolute URL");
-  }
-
-  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-    throw new TypeError("request.url must use http: or https:");
-  }
-
-  if (!policy.allowedTopLevelOrigins.includes(parsed.origin)) {
-    throw new Error(`request origin is not authorized by policy: ${parsed.origin}`);
-  }
-
-  return parsed;
-}
-
 export async function captureBrowserEvidence(
   request: BrowserEvidenceRequest,
   policyInput: BrowserEvidencePolicy,
@@ -120,18 +103,12 @@ export async function captureBrowserEvidence(
   }
 
   const policy = normalizeBrowserEvidencePolicy(policyInput);
-  const requestedUrl = assertedRequestedUrl(request.url, policy);
-  const networkOrigins = new Set([
-    ...policy.allowedTopLevelOrigins,
-    ...policy.allowedResourceOrigins,
-  ]);
-  const blockedOrigins = new Set<string>();
-  const blockedWebSocketOrigins = new Set<string>();
-
+  const requestedUrl = parseAuthorizedHttpUrl(
+    request.url,
+    policy.allowedTopLevelOrigins,
+    "request.url",
+  );
   const receiptId = randomUUID();
-  const artifactRoot = resolve(runtime.artifactRoot);
-  const screenshotAbsolutePath = join(artifactRoot, "browser", `${receiptId}.png`);
-  await mkdir(join(artifactRoot, "browser"), { recursive: true });
 
   const browser = await chromium.launch({ headless: runtime.headless ?? true });
   try {
@@ -139,42 +116,7 @@ export async function captureBrowserEvidence(
       acceptDownloads: false,
       serviceWorkers: "block",
     });
-
-    await context.route("**/*", async (route) => {
-      const requestUrl = route.request().url();
-      let parsed: URL;
-      try {
-        parsed = new URL(requestUrl);
-      } catch {
-        await route.abort("blockedbyclient");
-        return;
-      }
-
-      if (parsed.protocol === "data:" || parsed.protocol === "blob:") {
-        await route.continue();
-        return;
-      }
-
-      if (
-        (parsed.protocol === "http:" || parsed.protocol === "https:") &&
-        networkOrigins.has(parsed.origin)
-      ) {
-        await route.continue();
-        return;
-      }
-
-      blockedOrigins.add(parsed.origin === "null" ? parsed.protocol : parsed.origin);
-      await route.abort("blockedbyclient");
-    });
-
-    await context.routeWebSocket("**/*", (webSocket) => {
-      try {
-        blockedWebSocketOrigins.add(new URL(webSocket.url()).origin);
-      } catch {
-        blockedWebSocketOrigins.add("unparseable-websocket-origin");
-      }
-      return webSocket.close({ code: 1008, reason: "blocked by browser evidence policy" });
-    });
+    const audit = await installBrowserNetworkGuard(context, policy);
 
     const page = await context.newPage();
     const response = await page.goto(requestedUrl.toString(), {
@@ -182,79 +124,18 @@ export async function captureBrowserEvidence(
       timeout: policy.timeoutMs,
     });
 
-    const finalUrl = new URL(page.url());
-    if (!policy.allowedTopLevelOrigins.includes(finalUrl.origin)) {
-      throw new Error(`final page origin is not authorized by policy: ${finalUrl.origin}`);
-    }
-
-    const dom = await page.evaluate(
-      ({ maxDomChars, maxInteractiveElements, maxHeadings }) => {
-        const compact = (value: string): string => value.replace(/\s+/g, " ").trim();
-        const bodyText = document.body?.innerText ?? "";
-
-        const headings = Array.from(document.querySelectorAll("h1,h2,h3,h4,h5,h6"))
-          .slice(0, maxHeadings)
-          .map((element) => ({
-            level: Number(element.tagName.slice(1)),
-            text: compact(element.textContent ?? "").slice(0, 500),
-          }));
-
-        const interactiveElements = Array.from(
-          document.querySelectorAll("a,button,input,select,textarea,[role]"),
-        )
-          .slice(0, maxInteractiveElements)
-          .map((element) => {
-            const htmlElement = element as HTMLElement;
-            const text = compact(
-              htmlElement.innerText || element.getAttribute("placeholder") || "",
-            ).slice(0, 300);
-
-            let href: string | null = null;
-            if (element instanceof HTMLAnchorElement && element.href) {
-              try {
-                const parsed = new URL(element.href);
-                href = `${parsed.origin}${parsed.pathname}`;
-              } catch {
-                href = null;
-              }
-            }
-
-            return {
-              tag: element.tagName.toLowerCase(),
-              role: element.getAttribute("role"),
-              ariaLabel: element.getAttribute("aria-label"),
-              text,
-              href,
-              type: element instanceof HTMLInputElement ? element.type : null,
-              name: element.getAttribute("name"),
-            };
-          });
-
-        return {
-          title: document.title,
-          textExcerpt: bodyText.slice(0, maxDomChars),
-          textTruncated: bodyText.length > maxDomChars,
-          headings,
-          interactiveElements,
-        };
-      },
-      {
-        maxDomChars: policy.maxDomChars,
-        maxInteractiveElements: policy.maxInteractiveElements,
-        maxHeadings: MAX_HEADINGS,
-      },
+    const finalUrl = parseAuthorizedHttpUrl(
+      page.url(),
+      policy.allowedTopLevelOrigins,
+      "final page",
     );
-
-    await page.screenshot({
-      path: screenshotAbsolutePath,
-      type: "png",
-      fullPage: policy.fullPageScreenshot,
-    });
-
-    const screenshotBytes = await readFile(screenshotAbsolutePath);
-    const screenshotRelativePath = relative(artifactRoot, screenshotAbsolutePath)
-      .split(sep)
-      .join("/");
+    const dom = await collectDomEvidence(page, policy);
+    const screenshot = await persistScreenshot(
+      page,
+      runtime.artifactRoot,
+      receiptId,
+      policy.fullPageScreenshot,
+    );
 
     return {
       schemaVersion: "toadaid.browser-evidence.receipt.v1",
@@ -263,25 +144,18 @@ export async function captureBrowserEvidence(
       status: "CAPTURED",
       capturedAt: (runtime.now ?? (() => new Date()))().toISOString(),
       request: {
-        url: requestedUrl.toString(),
+        url: persistedHttpUrl(requestedUrl),
       },
       policy,
       page: {
-        requestedUrl: requestedUrl.toString(),
-        finalUrl: finalUrl.toString(),
+        requestedUrl: persistedHttpUrl(requestedUrl),
+        finalUrl: persistedHttpUrl(finalUrl),
         httpStatus: response?.status() ?? null,
         title: dom.title,
       },
-      screenshot: {
-        relativePath: screenshotRelativePath,
-        sha256: createHash("sha256").update(screenshotBytes).digest("hex"),
-        bytes: screenshotBytes.byteLength,
-      },
+      screenshot,
       dom,
-      network: {
-        blockedOrigins: [...blockedOrigins].sort(),
-        blockedWebSocketOrigins: [...blockedWebSocketOrigins].sort(),
-      },
+      network: networkEvidence(audit),
     };
   } finally {
     await browser.close();
