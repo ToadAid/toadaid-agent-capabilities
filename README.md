@@ -11,6 +11,7 @@ Implemented lanes:
 - **P3 — capability identity + policy:** keep capability installation separate from authority with sparse fail-closed policy resolution and decision traces.
 - **P4 — resumable run-state capsule:** preserve objective, phase, authority evidence, references, and work state across compaction/restart with tamper-evident continuity.
 - **P5 — persistent child-task lifecycle:** preserve subordinate task identity/state across failure and resume with fixed, non-widening delegated authority.
+- **P6 — workspace Time Travel:** capture immutable content-addressed snapshots, deterministic diffs, governed restore, and bounded history maintenance outside project Git.
 
 See [`BUILD_LIST.md`](./BUILD_LIST.md) for the canonical roadmap.
 
@@ -25,3 +26,5 @@ Installed does not mean authorized.
 Saved state does not grant authority.
 
 Delegation can only narrow authority.
+
+Workspace history never lives inside or rewrites project Git.

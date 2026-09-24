@@ -96,6 +96,26 @@ export const CORE_CAPABILITY_MANIFEST = createCapabilityManifest([
     description: "Execute bounded browser navigation, click, and type actions.",
     defaultDecision: "BLOCK",
   },
+  {
+    id: "workspace:snapshot",
+    description: "Capture a bounded immutable workspace snapshot in external history storage.",
+    defaultDecision: "BLOCK",
+  },
+  {
+    id: "workspace:diff",
+    description: "Compare immutable workspace snapshots and return deterministic change evidence.",
+    defaultDecision: "BLOCK",
+  },
+  {
+    id: "workspace:restore",
+    description: "Restore policy-managed workspace files from a verified snapshot.",
+    defaultDecision: "BLOCK",
+  },
+  {
+    id: "workspace:maintenance",
+    description: "Apply bounded retention, orphan cleanup, and workspace-history repair.",
+    defaultDecision: "BLOCK",
+  },
 ] as const);
 
 function capabilityMap(manifest: CapabilityManifest): ReadonlyMap<string, CapabilityDefinition> {

@@ -70,6 +70,29 @@ export type {
   ChildTaskTransitionKind,
   CreateChildTaskInput,
 } from "./childTaskLifecycle.js";
+export {
+  createWorkspaceSnapshot,
+  diffWorkspaceSnapshots,
+  maintainWorkspaceHistory,
+  normalizeWorkspaceSnapshotPolicy,
+  restoreWorkspaceSnapshot,
+  workspaceSnapshotSha256,
+} from "./workspaceTimeTravel.js";
+export type {
+  NormalizedWorkspaceSnapshotPolicy,
+  WorkspaceCapabilityId,
+  WorkspaceDiffEntry,
+  WorkspaceDiffKind,
+  WorkspaceDiffReceipt,
+  WorkspaceHistoryRuntime,
+  WorkspaceMaintenanceOptions,
+  WorkspaceMaintenanceReceipt,
+  WorkspaceRestoreReceipt,
+  WorkspaceSnapshot,
+  WorkspaceSnapshotEnvelope,
+  WorkspaceSnapshotFile,
+  WorkspaceSnapshotPolicy,
+} from "./workspaceTimeTravel.js";
 export type {
   BrowserEvidencePolicy,
   BrowserEvidenceReceipt,

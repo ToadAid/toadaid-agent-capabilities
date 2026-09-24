@@ -39,12 +39,14 @@ Checkbox law: mark an item complete only when the implementation is landed on ca
   - failed/blocked child resume
   - parent/delegation/child-policy authority intersection
   - SHA-256 child-task continuity chain
-- [ ] **P6 — Workspace Time Travel**
-  - snapshot
-  - deterministic diff
-  - governed restore
-  - retention/orphan cleanup
-  - lock recovery/corruption quarantine
+- [x] **P6 — Workspace Time Travel**
+  - immutable bounded content-addressed snapshots outside project Git
+  - deterministic path-sorted diff
+  - separately authorized exact restore with object preflight
+  - `.git` and policy-excluded paths preserved
+  - retention + orphan-object cleanup
+  - exclusive history lock with stale/corrupt lock quarantine
+  - corrupt snapshot/object quarantine
 - [ ] **P7 — Loop breaker + bounded repair**
   - repeated-output/failure fingerprinting
   - malformed tool-call syntax repair
@@ -80,6 +82,7 @@ Checkbox law: mark an item complete only when the implementation is landed on ca
 - Agent intent never grants itself authority.
 - Saved state never grants or widens authority.
 - Delegation can only narrow authority; it can never widen it.
+- Workspace history is external to project Git and restore requires separate authority.
 - Shared infrastructure stays provider/model neutral.
 - Prefer useful vertical capability cuts over framework ceremony.
 - Live economic authority remains outside this repository unless explicitly introduced through a separate governed boundary.
