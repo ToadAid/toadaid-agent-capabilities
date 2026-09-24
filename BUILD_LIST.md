@@ -47,11 +47,27 @@ Checkbox law: mark an item complete only when the implementation is landed on ca
   - retention + orphan-object cleanup
   - exclusive history lock with stale/corrupt lock quarantine
   - corrupt snapshot/object quarantine
-- [ ] **P7 — Loop breaker + bounded repair**
-  - repeated-output/failure fingerprinting
-  - malformed tool-call syntax repair
-  - hard stop after bounded repetition
-  - authority is never repaired or inferred
+- [x] **P7 — Loop breaker + bounded repair**
+  - SHA-256 repeated-output/tool/failure fingerprinting without raw-payload persistence
+  - bounded identical-output and consecutive-failure hard stops
+  - sticky halted state; no silent self-revival
+  - `runtime:bounded-repair` installed BLOCK by default
+  - allowlisted syntax-only repair for BOM / outer whitespace / whole JSON fence / trailing commas
+  - exact tool-call shape validation with recursively frozen plain JSON arguments
+  - semantics, missing fields, and authority are never repaired or inferred
+
+## Next integration cut
+
+- [ ] **R1 — OpenCodeReview adapter**
+  - deterministic review surface and semantic grouping
+  - mandatory review coverage accounting
+  - `review:inspect` authority separate from `review:fix`
+  - bounded reviewer/reflection children through P5
+  - P6 snapshot before authorized fixes + deterministic diff after
+  - capability-policy binding and structured review evidence/receipts
+
+## Remaining capability lane
+
 - [ ] **P8 — Scoped browser sessions**
   - explicit session ownership
   - origin-scoped session lease
@@ -68,14 +84,6 @@ Checkbox law: mark an item complete only when the implementation is landed on ca
   - adaptive throttling / per-origin crawl budgets
   - optional stealth fetch remains separate and BLOCK by default
 
-## Later integration lane
-
-- [ ] **OpenCodeReview adapter**
-  - deterministic review surface
-  - mandatory review coverage accounting
-  - capability-policy binding
-  - structured review evidence/receipts
-
 ## Standing design rules
 
 - Capabilities are explicit; authority is not ambient.
@@ -83,6 +91,7 @@ Checkbox law: mark an item complete only when the implementation is landed on ca
 - Saved state never grants or widens authority.
 - Delegation can only narrow authority; it can never widen it.
 - Workspace history is external to project Git and restore requires separate authority.
+- Loop breakers may halt without authority; repair may fix syntax only and never invent semantics or authority.
 - Shared infrastructure stays provider/model neutral.
 - Prefer useful vertical capability cuts over framework ceremony.
 - Live economic authority remains outside this repository unless explicitly introduced through a separate governed boundary.
