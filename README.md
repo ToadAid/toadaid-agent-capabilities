@@ -12,6 +12,7 @@ Implemented lanes:
 - **P4 — resumable run-state capsule:** preserve objective, phase, authority evidence, references, and work state across compaction/restart with tamper-evident continuity.
 - **P5 — persistent child-task lifecycle:** preserve subordinate task identity/state across failure and resume with fixed, non-widening delegated authority.
 - **P6 — workspace Time Travel:** capture immutable content-addressed snapshots, deterministic diffs, governed restore, and bounded history maintenance outside project Git.
+- **P7 — loop breaker + bounded repair:** fingerprint repeated failures, stop bounded loops, and optionally perform syntax-only tool-call repair without inventing semantics or authority.
 
 See [`BUILD_LIST.md`](./BUILD_LIST.md) for the canonical roadmap.
 
@@ -28,3 +29,5 @@ Saved state does not grant authority.
 Delegation can only narrow authority.
 
 Workspace history never lives inside or rewrites project Git.
+
+Loop breakers may halt work as a safety invariant; bounded repair requires explicit authority and never invents semantics or authority.
