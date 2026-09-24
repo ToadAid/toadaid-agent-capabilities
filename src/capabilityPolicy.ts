@@ -116,6 +116,11 @@ export const CORE_CAPABILITY_MANIFEST = createCapabilityManifest([
     description: "Apply bounded retention, orphan cleanup, and workspace-history repair.",
     defaultDecision: "BLOCK",
   },
+  {
+    id: "runtime:bounded-repair",
+    description: "Apply deterministic syntax-only repair to malformed tool-call JSON without inferring semantics or authority.",
+    defaultDecision: "BLOCK",
+  },
 ] as const);
 
 function capabilityMap(manifest: CapabilityManifest): ReadonlyMap<string, CapabilityDefinition> {
