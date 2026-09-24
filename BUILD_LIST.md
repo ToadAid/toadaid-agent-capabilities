@@ -23,12 +23,14 @@ Checkbox law: mark an item complete only when the implementation is landed on ca
   - sticky explicit BLOCK
   - fail-closed unknown/stale capability handling
   - plain-data authority decision trace
-- [ ] **P4 — Resumable run-state capsule**
+- [x] **P4 — Resumable run-state capsule**
   - objective and current phase
-  - authority snapshot
+  - authority snapshot as evidence, never a permission token
   - evidence/artifact references
   - completed/pending/blocked work
+  - SHA-256 sealed capsule + predecessor continuity
   - compaction/restart continuity
+  - resume authority = snapshot/current-policy intersection
 - [ ] **P5 — Persistent child-task lifecycle**
   - parent/child ownership
   - bounded delegated authority
@@ -63,6 +65,7 @@ Checkbox law: mark an item complete only when the implementation is landed on ca
 
 - Capabilities are explicit; authority is not ambient.
 - Agent intent never grants itself authority.
+- Saved state never grants or widens authority.
 - Shared infrastructure stays provider/model neutral.
 - Prefer useful vertical capability cuts over framework ceremony.
 - Live economic authority remains outside this repository unless explicitly introduced through a separate governed boundary.

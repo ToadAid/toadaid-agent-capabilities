@@ -19,6 +19,35 @@ export type {
   CapabilityPolicyLayer,
   CapabilityPolicyScope,
 } from "./capabilityPolicy.js";
+export {
+  assertRunStatePredecessor,
+  canonicalRunStateCapsule,
+  checkpointRunStateCapsule,
+  createRunStateCapsule,
+  parseRunStateCapsule,
+  resolveResumeCapabilityAuthority,
+  resumeRunStateCapsule,
+  runStateCapsuleSha256,
+  sealRunStateCapsule,
+  serializeRunStateCapsule,
+  validateRunStateCapsule,
+} from "./runStateCapsule.js";
+export type {
+  CreateRunStateCapsuleInput,
+  RunArtifactReference,
+  RunAuthoritySnapshot,
+  RunContinuityReason,
+  RunEvidenceReference,
+  RunObjectiveState,
+  RunObjectiveStatus,
+  RunResumeAuthorityDecision,
+  RunResumeAuthorityReason,
+  RunStateCapsule,
+  RunStateCapsuleEnvelope,
+  RunStateCheckpointUpdate,
+  RunStateContinuity,
+  RunWorkItem,
+} from "./runStateCapsule.js";
 export type {
   BrowserEvidencePolicy,
   BrowserEvidenceReceipt,
