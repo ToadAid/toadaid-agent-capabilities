@@ -31,11 +31,14 @@ Checkbox law: mark an item complete only when the implementation is landed on ca
   - SHA-256 sealed capsule + predecessor continuity
   - compaction/restart continuity
   - resume authority = snapshot/current-policy intersection
-- [ ] **P5 — Persistent child-task lifecycle**
-  - parent/child ownership
-  - bounded delegated authority
-  - durable child state
-  - resume failed/blocked child tasks
+- [x] **P5 — Persistent child-task lifecycle**
+  - parent/child ownership and nested parent binding
+  - fixed bounded delegated capability set
+  - embedded P4 durable child run state
+  - CREATED/RUNNING/BLOCKED/FAILED/COMPLETE state machine
+  - failed/blocked child resume
+  - parent/delegation/child-policy authority intersection
+  - SHA-256 child-task continuity chain
 - [ ] **P6 — Workspace Time Travel**
   - snapshot
   - deterministic diff
@@ -52,6 +55,16 @@ Checkbox law: mark an item complete only when the implementation is landed on ca
   - origin-scoped session lease
   - bounded expiry/persistence
   - no shared authenticated browser state by default
+- [ ] **P9 — Adaptive Web Intelligence**
+  - `web:extract` deterministic structured extraction
+  - `web:adaptive-locate` change-tolerant element identity + confidence threshold
+  - `web:crawl` bounded/resumable crawl worker
+  - `web:xhr-capture` explicit background API evidence
+  - isolated Scrapling adapter/worker; no direct sovereign MCP authority
+  - crawl checkpoints bound to P4/P5 continuity
+  - safe redirect/address-resolution hardening for SSRF-sensitive paths
+  - adaptive throttling / per-origin crawl budgets
+  - optional stealth fetch remains separate and BLOCK by default
 
 ## Later integration lane
 
@@ -66,6 +79,7 @@ Checkbox law: mark an item complete only when the implementation is landed on ca
 - Capabilities are explicit; authority is not ambient.
 - Agent intent never grants itself authority.
 - Saved state never grants or widens authority.
+- Delegation can only narrow authority; it can never widen it.
 - Shared infrastructure stays provider/model neutral.
 - Prefer useful vertical capability cuts over framework ceremony.
 - Live economic authority remains outside this repository unless explicitly introduced through a separate governed boundary.
