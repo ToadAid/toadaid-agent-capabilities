@@ -121,6 +121,16 @@ export const CORE_CAPABILITY_MANIFEST = createCapabilityManifest([
     description: "Apply deterministic syntax-only repair to malformed tool-call JSON without inferring semantics or authority.",
     defaultDecision: "BLOCK",
   },
+  {
+    id: "review:inspect",
+    description: "Build and execute bounded code-review inspection plans with mandatory coverage accounting.",
+    defaultDecision: "BLOCK",
+  },
+  {
+    id: "review:fix",
+    description: "Apply explicitly selected review findings through governed workspace snapshot and diff boundaries.",
+    defaultDecision: "BLOCK",
+  },
 ] as const);
 
 function capabilityMap(manifest: CapabilityManifest): ReadonlyMap<string, CapabilityDefinition> {
