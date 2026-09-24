@@ -93,6 +93,32 @@ export type {
   WorkspaceSnapshotFile,
   WorkspaceSnapshotPolicy,
 } from "./workspaceTimeTravel.js";
+export {
+  createLoopBreakerState,
+  fingerprintLoopObservation,
+  normalizeLoopBreakerPolicy,
+  recordLoopObservation,
+  repairToolCallSyntax,
+} from "./loopBreaker.js";
+export type {
+  BoundedRepairOperation,
+  BoundedRepairRefusal,
+  BoundedRepairRefusalReason,
+  BoundedRepairResult,
+  BoundedRepairSuccess,
+  BoundedToolCall,
+  LoopBreakerDecision,
+  LoopBreakerDecisionKind,
+  LoopBreakerHaltReason,
+  LoopBreakerHistoryEntry,
+  LoopBreakerPolicy,
+  LoopBreakerResult,
+  LoopBreakerState,
+  LoopObservation,
+  LoopObservationKind,
+  LoopObservationOutcome,
+  NormalizedLoopBreakerPolicy,
+} from "./loopBreaker.js";
 export type {
   BrowserEvidencePolicy,
   BrowserEvidenceReceipt,
