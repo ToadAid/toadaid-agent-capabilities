@@ -133,12 +133,16 @@ Checkbox law: mark an item complete only when the implementation is landed on ca
   - progress receipts bind to the exact invocation state
   - cooperative `CANCEL_REQUESTED` records intent only; it never claims the external side effect stopped
   - resumed STARTED/CANCEL_REQUESTED work becomes `RECONCILIATION_REQUIRED`, never blind retry
-- [ ] **Q1 — Unified run budget ledger**
-  - one bounded budget shared across parent run and P5 child tree
-  - ceilings for model requests, input/output tokens, tool calls, network requests, retries, wall-clock time, and child tasks
-  - child sub-allocation can only narrow parent remaining budget
-  - append-only usage receipts with deterministic remaining-budget calculation
-  - exhausted budget halts new work without inventing authority or erasing already-spent usage
+- [x] **Q1 — Unified run budget ledger**
+  - explicit ceilings for model requests, input/output tokens, tool calls, network requests, retries, wall-clock time, and child tasks
+  - SHA-256 sealed predecessor-bound ledger with append-only usage receipts
+  - deterministic remaining budget = limits - direct usage - child reservations
+  - H1 invocation/source hashes may bind usage provenance without persisting raw prompts/results
+  - child sub-allocation reserves its full budget plus one direct child slot from the parent
+  - nested child allocation can only narrow already-reserved parent fuel
+  - no silent reclaim/refund in v1; crashed/stale child state cannot cause double-spend
+  - operation-specific availability fails closed only on the metrics that proposed work needs
+  - budget state is accounting evidence, never capability authority
 - [ ] **C1 — Capability contract + version discovery**
   - self-describing capability contract ID/version and supported feature set
   - schema/version compatibility checked before W1 compile and runtime invocation

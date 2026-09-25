@@ -13,6 +13,10 @@
     "./invocation": {
       "types": "./dist/src/capabilityInvocation.d.ts",
       "import": "./dist/src/capabilityInvocation.js"
+    },
+    "./budget": {
+      "types": "./dist/src/runBudgetLedger.d.ts",
+      "import": "./dist/src/runBudgetLedger.js"
     }
   },
   "engines": {

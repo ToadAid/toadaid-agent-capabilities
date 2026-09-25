@@ -20,6 +20,7 @@ Implemented lanes:
 - **P11 — scoped secret leases:** keep raw secret bytes outside agent state while binding opaque handles to owner/provider/profile scope, exact consumer capabilities, short-lived materialization grants, and path-safe projection targets.
 - **W1 — governed recipe compiler:** compile declarative parameters, response schemas, turn/retry ceilings, and explicit required/optional/forbidden capability sets through current P3 policy before P4/P5 execution.
 - **H1 — capability invocation lifecycle:** bind request, current-policy authorization, start, progress/cancellation intent, completion/failure evidence, and resume assessment to one tamper-evident invocation identity.
+- **Q1 — unified run budget ledger:** bound model/token/tool/network/retry/time/child consumption with append-only usage receipts and conservative child sub-allocation across the run tree.
 
 See [`BUILD_LIST.md`](./BUILD_LIST.md) for the canonical roadmap.
 
@@ -52,3 +53,5 @@ Secret leases contain opaque broker handles, never secret bytes; materialization
 Recipes declare workflow intent and capability bounds; compiled plans are tamper-evident non-authority state and must be rechecked against current P3 policy before execution or resume.
 
 Invocation records are evidence, not permission tokens; authorization is rechecked immediately before start, cancellation requests do not imply side effects stopped, and already-started resumed work requires reconciliation instead of blind retry.
+
+Run budgets are accounting state, not capability grants; child allocations reserve parent fuel and already-spent or reserved capacity is never silently recreated on resume.
