@@ -25,6 +25,10 @@
     "./replay": {
       "types": "./dist/src/replayFence.d.ts",
       "import": "./dist/src/replayFence.js"
+    },
+    "./browser-resilience": {
+      "types": "./dist/src/browserResilience.d.ts",
+      "import": "./dist/src/browserResilience.js"
     }
   },
   "engines": {

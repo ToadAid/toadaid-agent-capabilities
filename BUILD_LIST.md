@@ -162,12 +162,14 @@ Checkbox law: mark an item complete only when the implementation is landed on ca
   - `NON_REPLAYABLE` never replays the same invocation; confirmed-not-executed can only require a new invocation
   - retry authorization refuses stale/changed H1 invocation records after reconciliation opens
   - economic/Git/provider mutations remain non-replayable unless the adapter contract explicitly proves idempotency
-- [ ] **B1 — Browser resilience hardening**
-  - stale-DOM refusal after failed capture
-  - recoverable degraded browser evidence instead of fabricated state
-  - navigation-readiness and same-document navigation handling
-  - bounded DOM fanout and stable selector/index identity across sessions
-  - distinct timeout/truncation/recoverable-error receipts
+- [x] **B1 — Browser resilience hardening**
+  - navigation epochs invalidate prior DOM immediately; fresh DOM tokens bind exact epoch + sanitized page identity + DOM SHA
+  - capture failure clears current DOM and emits bounded `DEGRADED` evidence with typed reason, recoverability, and error fingerprint
+  - stale DOM is never reused as fallback after navigation, timeout, page-identity change, or failed capture
+  - same-document navigation does not wait for a nonexistent new `DOMContentLoaded`; full-document readiness timeout degrades explicitly
+  - bounded text/headings/interactive fanout carries explicit truncation flags instead of pretending output is complete
+  - deterministic semantic element IDs survive session/CDP index changes and strip href query/fragment data
+  - recovery state remains non-authority; H1/Q1/X1 still govern lifecycle, budget, and replay
 
 ## Pre-wiring integration proof
 

@@ -22,6 +22,8 @@ Implemented lanes:
 - **H1 — capability invocation lifecycle:** bind request, current-policy authorization, start, progress/cancellation intent, completion/failure evidence, and resume assessment to one tamper-evident invocation identity.
 - **Q1 — unified run budget ledger:** bound model/token/tool/network/retry/time/child consumption with append-only usage receipts and conservative child sub-allocation across the run tree.
 - **C1 — capability contract + version discovery:** discover self-describing capability contracts, prove major/minor/feature compatibility before contract-aware W1 compile and H1 start, and bind compiled/runtime use to exact descriptor provenance.
+- **X1 — idempotency / replay fence:** classify logical invocations before start, bind deterministic replay identity, and require reconciliation proof before retrying uncertain side effects.
+- **B1 — browser resilience hardening:** invalidate stale DOM across navigation/failure, emit degraded evidence instead of fabricated state, distinguish same-document/full-document readiness, bound truncation, and provide deterministic semantic element IDs.
 - **X1 — idempotency / replay fence:** classify replay safety before start, bind deterministic idempotency keys to logical invocation identity, and require explicit reconciliation before uncertain external outcomes can be retried.
 
 See [`BUILD_LIST.md`](./BUILD_LIST.md) for the canonical roadmap.
@@ -61,3 +63,5 @@ Run budgets are accounting state, not capability grants; child allocations reser
 Capability contract discovery is compatibility evidence, not authority. Contract-aware plans and invocations still require current P3 permission, and a changed implementation descriptor requires explicit recompile/rebind instead of silent adaptation.
 
 Replay fences are retry-discipline evidence, not authority. Unknown external outcomes remain blocked until reconciliation; non-replayable mutations never become replayable merely because a transport timed out.
+
+Browser resilience evidence is recovery state, not browser authority; stale DOM is refused after navigation/capture failure, degraded receipts never fabricate page state, and recoverable does not mean automatically retryable.
