@@ -16,6 +16,7 @@ Implemented lanes:
 - **R1 — OpenCodeReview adapter:** bind OCR Delegation Mode into deterministic review planning, mandatory coverage, P5 reviewer/reflection specs, and a separately authorized P6-backed fix boundary.
 - **P8 — scoped browser sessions:** bind optional browser state to explicit owner/origin/expiry leases while keeping persistent state behind separate authority.
 - **P9 — adaptive web intelligence:** deterministic extraction, confidence-gated adaptive element relocation, sealed resumable crawl checkpoints, guarded XHR evidence, and an isolated Scrapling worker boundary.
+- **P10 — governed human interrupts:** create typed durable human decision gates bound to exact P4 state, accept one schema-validated resolution, and produce a resume proof without turning human text into authority.
 
 See [`BUILD_LIST.md`](./BUILD_LIST.md) for the canonical roadmap.
 
@@ -40,3 +41,5 @@ Review inspection never implies review fixes, and external review engines never 
 Browser session leases never imply browser action authority, and persistent authenticated state is never ambient or shared by default.
 
 Adaptive web evidence never implies arbitrary HTTP, browser-action, stealth, or economic authority; the Scrapling worker is isolated behind typed policy.
+
+Human interrupt responses are typed run data, never capability grants; resume requires the exact bound P4 state and a sealed resolved interrupt.

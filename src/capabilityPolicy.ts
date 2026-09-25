@@ -166,6 +166,16 @@ export const CORE_CAPABILITY_MANIFEST = createCapabilityManifest([
     description: "Permit optional stealth fetching only when separately authorized by current policy.",
     defaultDecision: "BLOCK",
   },
+  {
+    id: "interrupt:create",
+    description: "Create a typed durable human interrupt bound to an exact run-state capsule.",
+    defaultDecision: "BLOCK",
+  },
+  {
+    id: "interrupt:resolve",
+    description: "Resolve an open human interrupt with schema-validated human input bound to the same run state.",
+    defaultDecision: "BLOCK",
+  },
 ] as const);
 
 function capabilityMap(manifest: CapabilityManifest): ReadonlyMap<string, CapabilityDefinition> {

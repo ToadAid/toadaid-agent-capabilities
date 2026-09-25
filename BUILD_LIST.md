@@ -92,6 +92,39 @@ Checkbox law: mark an item complete only when the implementation is landed on ca
   - per-origin crawl budgets, deduplication, depth/URL ceilings, and adaptive latency/429 backoff
   - `web:stealth-fetch` remains separate and BLOCK by default
   - resumable checkpoints refuse query/fragment URLs to avoid persisting tokens/secrets
+- [x] **P10 — Governed human interrupts**
+  - `interrupt:create` and `interrupt:resolve` installed separately, both BLOCK by default
+  - OPEN -> RESOLVED one-way lifecycle with SHA-256 sealed predecessor continuity
+  - exact P4 run-id / revision / capsule-hash binding
+  - bounded scalar/object response schemas with no undeclared fields
+  - resolution refuses stale/different run state and second resolution attempts
+  - resume proof requires a resolved interrupt bound to the unchanged paused run state
+  - human response data never grants, repairs, or widens capability authority
+  - durable interruption is a pause/decision primitive, not an approval token
+
+## Next research-derived capability lane
+
+- [ ] **P11 — Scoped secret leases**
+  - secret handles instead of secret bytes in agent state
+  - capability-bound materialization with TTL and explicit revoke
+  - provider/profile scoping and path-safe credential projection
+  - no saved run state or child task may self-authorize secret access
+- [ ] **W1 — Governed recipe compiler**
+  - declarative parameters, response schema, retries, and turn ceilings
+  - explicit required/optional/forbidden capability set
+  - compile recipe authority through P3 before P4/P5 execution
+  - fail closed when a declared workflow step lacks its required capability
+- [ ] **H1 — Capability invocation lifecycle**
+  - stable tool-call identity across request / policy / start / result / failure
+  - deterministic pre-tool policy hook and post-tool evidence hook
+  - approval/refusal metadata bound to the exact invocation
+  - revocations remain authoritative across managers and resumed runs
+- [ ] **B1 — Browser resilience hardening**
+  - stale-DOM refusal after failed capture
+  - recoverable degraded browser evidence instead of fabricated state
+  - navigation-readiness and same-document navigation handling
+  - bounded DOM fanout and stable selector/index identity across sessions
+  - distinct timeout/truncation/recoverable-error receipts
 
 ## Standing design rules
 
@@ -104,6 +137,7 @@ Checkbox law: mark an item complete only when the implementation is landed on ca
 - Review inspection never implies review fixes; external review engines are deterministic evidence providers, not sovereign runtimes.
 - Browser session leases are owner/origin/expiry scoped; saved or persistent state never grants browser action authority.
 - Adaptive web evidence remains evidence; crawl/XHR/stealth authority is explicit and never implies mutation or economic authority.
+- Human interrupt responses are typed data, not approvals or authority; resume is bound to the exact paused run state.
 - Shared infrastructure stays provider/model neutral.
 - Prefer useful vertical capability cuts over framework ceremony.
 - Live economic authority remains outside this repository unless explicitly introduced through a separate governed boundary.
