@@ -97,6 +97,16 @@ export const CORE_CAPABILITY_MANIFEST = createCapabilityManifest([
     defaultDecision: "BLOCK",
   },
   {
+    id: "browser:session",
+    description: "Create, validate, use, and revoke an owner-bound origin-scoped browser session lease.",
+    defaultDecision: "BLOCK",
+  },
+  {
+    id: "browser:session-persist",
+    description: "Permit runtime-owned browser session state to persist beyond an ephemeral context.",
+    defaultDecision: "BLOCK",
+  },
+  {
     id: "workspace:snapshot",
     description: "Capture a bounded immutable workspace snapshot in external history storage.",
     defaultDecision: "BLOCK",
