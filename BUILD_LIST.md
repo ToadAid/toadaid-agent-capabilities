@@ -70,11 +70,16 @@ Checkbox law: mark an item complete only when the implementation is landed on ca
 
 ## Remaining capability lane
 
-- [ ] **P8 — Scoped browser sessions**
-  - explicit session ownership
-  - origin-scoped session lease
-  - bounded expiry/persistence
-  - no shared authenticated browser state by default
+- [x] **P8 — Scoped browser sessions**
+  - explicit owner-bound session lease
+  - exact-origin scope with bounded origin count
+  - 30-minute default TTL / 24-hour hard maximum
+  - SHA-256 sealed lease with bounded serialization
+  - current-authority recheck on every use
+  - sticky revocation and expiry refusal
+  - `browser:session` and `browser:session-persist` separate, both BLOCK by default
+  - persistent state represented only by opaque owner/session-bound runtime reference
+  - no shared authenticated browser state by default; P1/P2 remain fresh-context unless explicitly opted in
 - [ ] **P9 — Adaptive Web Intelligence**
   - `web:extract` deterministic structured extraction
   - `web:adaptive-locate` change-tolerant element identity + confidence threshold
@@ -95,6 +100,7 @@ Checkbox law: mark an item complete only when the implementation is landed on ca
 - Workspace history is external to project Git and restore requires separate authority.
 - Loop breakers may halt without authority; repair may fix syntax only and never invent semantics or authority.
 - Review inspection never implies review fixes; external review engines are deterministic evidence providers, not sovereign runtimes.
+- Browser session leases are owner/origin/expiry scoped; saved or persistent state never grants browser action authority.
 - Shared infrastructure stays provider/model neutral.
 - Prefer useful vertical capability cuts over framework ceremony.
 - Live economic authority remains outside this repository unless explicitly introduced through a separate governed boundary.
