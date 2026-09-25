@@ -143,12 +143,15 @@ Checkbox law: mark an item complete only when the implementation is landed on ca
   - no silent reclaim/refund in v1; crashed/stale child state cannot cause double-spend
   - operation-specific availability fails closed only on the metrics that proposed work needs
   - budget state is accounting evidence, never capability authority
-- [ ] **C1 — Capability contract + version discovery**
-  - self-describing capability contract ID/version and supported feature set
-  - schema/version compatibility checked before W1 compile and runtime invocation
-  - implementation fingerprint for provenance without making code hashes into authority
-  - incompatible or unknown contract versions fail closed instead of silently adapting
-  - deprecation/compatibility metadata remains bounded and provider-neutral
+- [x] **C1 — Capability contract + version discovery**
+  - SHA-sealed self-describing descriptor registry with capability ID, contract ID, major/minor version, schemas, feature set, and implementation fingerprint
+  - exact-major / minimum-minor / required-feature compatibility checks; unknown or incompatible installed capabilities fail closed
+  - deprecation refuses by default unless the caller explicitly opts into that exact deprecated contract
+  - contract-aware W1 profiles cover every required/optional recipe capability before base W1 compilation
+  - truly absent optional capabilities remain explicit skips; installed optional capabilities must advertise a compatible contract
+  - compiled enabled capability bindings retain exact descriptor SHA; descriptor/implementation changes require recompile rather than silent adoption
+  - H1 contract binding ties capability + run + invocation + intent to the compatible descriptor and must pass while the invocation is `AUTHORIZED`
+  - discovery/implementation fingerprints are provenance and compatibility evidence only; they never grant P3 authority
 - [ ] **X1 — Idempotency / replay fence**
   - classify invocations as `SAFE_READ`, `IDEMPOTENT_WRITE`, or `NON_REPLAYABLE`
   - deterministic idempotency key binding run + invocation + capability + intent

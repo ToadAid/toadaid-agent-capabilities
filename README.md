@@ -21,6 +21,7 @@ Implemented lanes:
 - **W1 — governed recipe compiler:** compile declarative parameters, response schemas, turn/retry ceilings, and explicit required/optional/forbidden capability sets through current P3 policy before P4/P5 execution.
 - **H1 — capability invocation lifecycle:** bind request, current-policy authorization, start, progress/cancellation intent, completion/failure evidence, and resume assessment to one tamper-evident invocation identity.
 - **Q1 — unified run budget ledger:** bound model/token/tool/network/retry/time/child consumption with append-only usage receipts and conservative child sub-allocation across the run tree.
+- **C1 — capability contract + version discovery:** discover self-describing capability contracts, prove major/minor/feature compatibility before contract-aware W1 compile and H1 start, and bind compiled/runtime use to exact descriptor provenance.
 
 See [`BUILD_LIST.md`](./BUILD_LIST.md) for the canonical roadmap.
 
@@ -55,3 +56,5 @@ Recipes declare workflow intent and capability bounds; compiled plans are tamper
 Invocation records are evidence, not permission tokens; authorization is rechecked immediately before start, cancellation requests do not imply side effects stopped, and already-started resumed work requires reconciliation instead of blind retry.
 
 Run budgets are accounting state, not capability grants; child allocations reserve parent fuel and already-spent or reserved capacity is never silently recreated on resume.
+
+Capability contract discovery is compatibility evidence, not authority. Contract-aware plans and invocations still require current P3 permission, and a changed implementation descriptor requires explicit recompile/rebind instead of silent adaptation.

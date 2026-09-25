@@ -17,6 +17,10 @@
     "./budget": {
       "types": "./dist/src/runBudgetLedger.d.ts",
       "import": "./dist/src/runBudgetLedger.js"
+    },
+    "./contracts": {
+      "types": "./dist/src/capabilityContract.d.ts",
+      "import": "./dist/src/capabilityContract.js"
     }
   },
   "engines": {
