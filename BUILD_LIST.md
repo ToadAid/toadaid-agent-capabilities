@@ -181,7 +181,7 @@ Checkbox law: mark an item complete only when the implementation is landed on ca
   - `npm pack --dry-run` must contain every JS/declaration export target and refuse source/test/docs/workflow/script leakage
   - package remains private during alpha; D1 does not publish, change repository access, or grant capability authority
   - V1 must consume the package boundary rather than repository source paths
-- [ ] **V1 — Deterministic Agent0 vertical proof harness**
+- [x] **V1 — Deterministic Agent0 vertical proof harness**
   - clean-room harness packs the package and executes from a temporary consumer `node_modules`; repository `src/` paths are never imported
   - exercise contract-aware W1 -> P4/P5 child -> H1 -> bounded browser resilience evidence -> receipt -> checkpoint -> restart/resume
   - prove Q1 parent/child budget reservation + durable usage accounting and C1 exact contract binding before start
@@ -189,8 +189,9 @@ Checkbox law: mark an item complete only when the implementation is landed on ca
   - prove P10 interrupt resolution refuses changed P4 state and P11 secret materialization stays opaque + current-authority-bound
   - prove B1 stale-DOM refusal and explicit degraded evidence without launching a live browser or using network fixtures
   - no wallet, trading, irreversible economic action, provider mutation, push, or merge occurs in the graduation scenario
-  - completion marker is exactly `V1_AGENT0_VERTICAL_OK`; keep V1 unchecked until that marker is produced by the packed clean-room consumer
-  - capability library becomes integration-ready only after the clean-room vertical proof closes
+  - completion marker is exactly `V1_AGENT0_VERTICAL_OK`
+  - 2026-09-25 TNG clean-room proof emitted `PACKAGE_DISTRIBUTION_OK exports=6 files=146` then `V1_AGENT0_VERTICAL_OK` with `packageResolvedFromConsumer=true`, `secretHandleOnly=true`, `nonReplayableDisposition=NEW_INVOCATION_REQUIRED`, and post-restart browser authority `BLOCK`
+  - capability library is integration-ready after this clean-room vertical proof closure
 
 ## Standing design rules
 
