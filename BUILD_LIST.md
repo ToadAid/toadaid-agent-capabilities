@@ -124,17 +124,49 @@ Checkbox law: mark an item complete only when the implementation is landed on ca
   - normalized recipe + compiled plan are SHA-256 fingerprinted/sealed
   - pre-execution/resume authority recheck refuses revocation and never silently adopts newly granted optional authority
   - compiled plans are bounded non-authority state intended to seed P4/P5 execution
-- [ ] **H1 — Capability invocation lifecycle**
-  - stable tool-call identity across request / policy / start / result / failure
-  - deterministic pre-tool policy hook and post-tool evidence hook
-  - approval/refusal metadata bound to the exact invocation
-  - revocations remain authoritative across managers and resumed runs
+- [x] **H1 — Capability invocation lifecycle**
+  - stable invocation identity across request / policy / start / result / failure
+  - SHA-256 sealed predecessor continuity; raw arguments/results stay out of lifecycle state
+  - deterministic pre-start P3 recheck so stale authorization cannot start work
+  - bounded post-tool evidence references and result/error fingerprints
+  - manager changes and resumed runs never bypass current revocation
+  - progress receipts bind to the exact invocation state
+  - cooperative `CANCEL_REQUESTED` records intent only; it never claims the external side effect stopped
+  - resumed STARTED/CANCEL_REQUESTED work becomes `RECONCILIATION_REQUIRED`, never blind retry
+- [ ] **Q1 — Unified run budget ledger**
+  - one bounded budget shared across parent run and P5 child tree
+  - ceilings for model requests, input/output tokens, tool calls, network requests, retries, wall-clock time, and child tasks
+  - child sub-allocation can only narrow parent remaining budget
+  - append-only usage receipts with deterministic remaining-budget calculation
+  - exhausted budget halts new work without inventing authority or erasing already-spent usage
+- [ ] **C1 — Capability contract + version discovery**
+  - self-describing capability contract ID/version and supported feature set
+  - schema/version compatibility checked before W1 compile and runtime invocation
+  - implementation fingerprint for provenance without making code hashes into authority
+  - incompatible or unknown contract versions fail closed instead of silently adapting
+  - deprecation/compatibility metadata remains bounded and provider-neutral
+- [ ] **X1 — Idempotency / replay fence**
+  - classify invocations as `SAFE_READ`, `IDEMPOTENT_WRITE`, or `NON_REPLAYABLE`
+  - deterministic idempotency key binding run + invocation + capability + intent
+  - timeout/unknown-outcome becomes reconciliation, never blind retry
+  - prior receipt/external-state proof required before retrying a mutating invocation
+  - economic/Git/provider writes stay non-replayable unless an adapter proves idempotency
 - [ ] **B1 — Browser resilience hardening**
   - stale-DOM refusal after failed capture
   - recoverable degraded browser evidence instead of fabricated state
   - navigation-readiness and same-document navigation handling
   - bounded DOM fanout and stable selector/index identity across sessions
   - distinct timeout/truncation/recoverable-error receipts
+
+## Pre-wiring integration proof
+
+- [ ] **V1 — Deterministic Agent0 vertical proof harness**
+  - exercise W1 -> P4/P5 -> H1 -> real bounded capability -> receipt -> restart/resume
+  - recorded/deterministic model and tool fixtures for replayable regression tests
+  - prove P10 human interrupt and P11 secret-handle boundaries without exposing raw credentials
+  - prove Q1 budget consumption, C1 contract checks, X1 replay discipline, and B1 degraded browser recovery
+  - no wallet, trading, irreversible economic authority, push, or merge in the graduation proof
+  - capability library becomes integration-ready only after the vertical proof closes
 
 ## Standing design rules
 
@@ -150,6 +182,8 @@ Checkbox law: mark an item complete only when the implementation is landed on ca
 - Human interrupt responses are typed data, not approvals or authority; resume is bound to the exact paused run state.
 - Secret handles are references, never credentials; materialization requires fresh current authority and raw secret bytes stay runtime-owned.
 - Recipe definitions declare workflow bounds; compiled plans are non-authority state and must be rechecked against current P3 policy before execution/resume.
+- Invocation lifecycle evidence never becomes authority; fresh policy checks govern start/resume and already-started work requires reconciliation before replay.
+- Budgets, capability contracts, and replay fences bound execution economics/compatibility/retries without granting new authority.
 - Shared infrastructure stays provider/model neutral.
 - Prefer useful vertical capability cuts over framework ceremony.
 - Live economic authority remains outside this repository unless explicitly introduced through a separate governed boundary.

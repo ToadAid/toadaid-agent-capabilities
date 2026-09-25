@@ -9,6 +9,10 @@
     ".": {
       "types": "./dist/src/index.d.ts",
       "import": "./dist/src/index.js"
+    },
+    "./invocation": {
+      "types": "./dist/src/capabilityInvocation.d.ts",
+      "import": "./dist/src/capabilityInvocation.js"
     }
   },
   "engines": {
