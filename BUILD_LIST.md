@@ -152,12 +152,16 @@ Checkbox law: mark an item complete only when the implementation is landed on ca
   - compiled enabled capability bindings retain exact descriptor SHA; descriptor/implementation changes require recompile rather than silent adoption
   - H1 contract binding ties capability + run + invocation + intent to the compatible descriptor and must pass while the invocation is `AUTHORIZED`
   - discovery/implementation fingerprints are provenance and compatibility evidence only; they never grant P3 authority
-- [ ] **X1 — Idempotency / replay fence**
-  - classify invocations as `SAFE_READ`, `IDEMPOTENT_WRITE`, or `NON_REPLAYABLE`
-  - deterministic idempotency key binding run + invocation + capability + intent
-  - timeout/unknown-outcome becomes reconciliation, never blind retry
-  - prior receipt/external-state proof required before retrying a mutating invocation
-  - economic/Git/provider writes stay non-replayable unless an adapter proves idempotency
+- [x] **X1 — Idempotency / replay fence**
+  - explicit `SAFE_READ`, `IDEMPOTENT_WRITE`, or `NON_REPLAYABLE` classification before H1 start
+  - deterministic idempotency key binds run + invocation + capability + intent
+  - idempotent writes require a C1 contract-ready receipt advertising an exact idempotency feature for the same invocation/capability
+  - timeout/unknown outcome opens sealed reconciliation while H1 remains active; terminal H1 work cannot be reopened
+  - confirmed findings require proof SHA; raw provider evidence remains external behind bounded references
+  - `IDEMPOTENT_WRITE` replay requires confirmed-not-executed proof and preserves the exact original idempotency key
+  - `NON_REPLAYABLE` never replays the same invocation; confirmed-not-executed can only require a new invocation
+  - retry authorization refuses stale/changed H1 invocation records after reconciliation opens
+  - economic/Git/provider mutations remain non-replayable unless the adapter contract explicitly proves idempotency
 - [ ] **B1 — Browser resilience hardening**
   - stale-DOM refusal after failed capture
   - recoverable degraded browser evidence instead of fabricated state

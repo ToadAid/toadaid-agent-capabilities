@@ -21,6 +21,10 @@
     "./contracts": {
       "types": "./dist/src/capabilityContract.d.ts",
       "import": "./dist/src/capabilityContract.js"
+    },
+    "./replay": {
+      "types": "./dist/src/replayFence.d.ts",
+      "import": "./dist/src/replayFence.js"
     }
   },
   "engines": {
