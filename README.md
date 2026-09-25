@@ -17,6 +17,7 @@ Implemented lanes:
 - **P8 — scoped browser sessions:** bind optional browser state to explicit owner/origin/expiry leases while keeping persistent state behind separate authority.
 - **P9 — adaptive web intelligence:** deterministic extraction, confidence-gated adaptive element relocation, sealed resumable crawl checkpoints, guarded XHR evidence, and an isolated Scrapling worker boundary.
 - **P10 — governed human interrupts:** create typed durable human decision gates bound to exact P4 state, accept one schema-validated resolution, and produce a resume proof without turning human text into authority.
+- **P11 — scoped secret leases:** keep raw secret bytes outside agent state while binding opaque handles to owner/provider/profile scope, exact consumer capabilities, short-lived materialization grants, and path-safe projection targets.
 
 See [`BUILD_LIST.md`](./BUILD_LIST.md) for the canonical roadmap.
 
@@ -43,3 +44,5 @@ Browser session leases never imply browser action authority, and persistent auth
 Adaptive web evidence never implies arbitrary HTTP, browser-action, stealth, or economic authority; the Scrapling worker is isolated behind typed policy.
 
 Human interrupt responses are typed run data, never capability grants; resume requires the exact bound P4 state and a sealed resolved interrupt.
+
+Secret leases contain opaque broker handles, never secret bytes; materialization requires fresh secret and consumer authority, and revocation can only narrow access.

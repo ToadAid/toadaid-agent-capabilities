@@ -104,11 +104,15 @@ Checkbox law: mark an item complete only when the implementation is landed on ca
 
 ## Next research-derived capability lane
 
-- [ ] **P11 — Scoped secret leases**
-  - secret handles instead of secret bytes in agent state
-  - capability-bound materialization with TTL and explicit revoke
-  - provider/profile scoping and path-safe credential projection
-  - no saved run state or child task may self-authorize secret access
+- [x] **P11 — Scoped secret leases**
+  - `secret:lease` and `secret:materialize` installed separately, both BLOCK by default
+  - broker-generated opaque secret handles only; raw secret bytes never enter lease/grant state
+  - fixed owner/provider/profile + consumer-capability scope with bounded lease TTL
+  - short-lived materialization grants cannot outlive the parent lease
+  - materialization rechecks both current `secret:materialize` and exact consumer capability authority
+  - ENV and 0600 FILE projection targets are explicit and path-safe
+  - revocation is one-way, SHA-256 predecessor-bound, and needs no widening authority
+  - P4/P5 saved state may carry handles but can never self-authorize secret access
 - [ ] **W1 — Governed recipe compiler**
   - declarative parameters, response schema, retries, and turn ceilings
   - explicit required/optional/forbidden capability set
@@ -138,6 +142,7 @@ Checkbox law: mark an item complete only when the implementation is landed on ca
 - Browser session leases are owner/origin/expiry scoped; saved or persistent state never grants browser action authority.
 - Adaptive web evidence remains evidence; crawl/XHR/stealth authority is explicit and never implies mutation or economic authority.
 - Human interrupt responses are typed data, not approvals or authority; resume is bound to the exact paused run state.
+- Secret handles are references, never credentials; materialization requires fresh current authority and raw secret bytes stay runtime-owned.
 - Shared infrastructure stays provider/model neutral.
 - Prefer useful vertical capability cuts over framework ceremony.
 - Live economic authority remains outside this repository unless explicitly introduced through a separate governed boundary.

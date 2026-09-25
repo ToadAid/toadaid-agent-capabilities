@@ -176,6 +176,16 @@ export const CORE_CAPABILITY_MANIFEST = createCapabilityManifest([
     description: "Resolve an open human interrupt with schema-validated human input bound to the same run state.",
     defaultDecision: "BLOCK",
   },
+  {
+    id: "secret:lease",
+    description: "Create an owner/provider/profile-scoped lease over an opaque runtime-owned secret handle.",
+    defaultDecision: "BLOCK",
+  },
+  {
+    id: "secret:materialize",
+    description: "Issue and verify a short-lived secret materialization grant for one currently authorized consumer capability.",
+    defaultDecision: "BLOCK",
+  },
 ] as const);
 
 function capabilityMap(manifest: CapabilityManifest): ReadonlyMap<string, CapabilityDefinition> {
