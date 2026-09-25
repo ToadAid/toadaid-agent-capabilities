@@ -182,12 +182,15 @@ Checkbox law: mark an item complete only when the implementation is landed on ca
   - package remains private during alpha; D1 does not publish, change repository access, or grant capability authority
   - V1 must consume the package boundary rather than repository source paths
 - [ ] **V1 — Deterministic Agent0 vertical proof harness**
-  - exercise W1 -> P4/P5 -> H1 -> real bounded capability -> receipt -> restart/resume
-  - recorded/deterministic model and tool fixtures for replayable regression tests
-  - prove P10 human interrupt and P11 secret-handle boundaries without exposing raw credentials
-  - prove Q1 budget consumption, C1 contract checks, X1 replay discipline, and B1 degraded browser recovery
-  - no wallet, trading, irreversible economic authority, push, or merge in the graduation proof
-  - capability library becomes integration-ready only after the vertical proof closes
+  - clean-room harness packs the package and executes from a temporary consumer `node_modules`; repository `src/` paths are never imported
+  - exercise contract-aware W1 -> P4/P5 child -> H1 -> bounded browser resilience evidence -> receipt -> checkpoint -> restart/resume
+  - prove Q1 parent/child budget reservation + durable usage accounting and C1 exact contract binding before start
+  - prove X1 `NON_REPLAYABLE` uncertain mutation resolves to `NEW_INVOCATION_REQUIRED`, never same-invocation replay
+  - prove P10 interrupt resolution refuses changed P4 state and P11 secret materialization stays opaque + current-authority-bound
+  - prove B1 stale-DOM refusal and explicit degraded evidence without launching a live browser or using network fixtures
+  - no wallet, trading, irreversible economic action, provider mutation, push, or merge occurs in the graduation scenario
+  - completion marker is exactly `V1_AGENT0_VERTICAL_OK`; keep V1 unchecked until that marker is produced by the packed clean-room consumer
+  - capability library becomes integration-ready only after the clean-room vertical proof closes
 
 ## Standing design rules
 

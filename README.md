@@ -24,6 +24,7 @@ Implemented lanes:
 - **C1 — capability contract + version discovery:** discover self-describing capability contracts, prove major/minor/feature compatibility before contract-aware W1 compile and H1 start, and bind compiled/runtime use to exact descriptor provenance.
 - **X1 — idempotency / replay fence:** classify logical invocations before start, bind deterministic replay identity, and require reconciliation proof before retrying uncertain side effects.
 - **B1 — browser resilience hardening:** invalidate stale DOM across navigation/failure, emit degraded evidence instead of fabricated state, distinguish same-document/full-document readiness, bound truncation, and provide deterministic semantic element IDs.
+- **V1 — Agent0 graduation harness (pending proof):** pack the library into a clean-room consumer and exercise governed recipe, continuity, delegation, invocation, budgets, contracts, replay discipline, human interrupts, secret handles, browser degradation, checkpoint, and restart through public package boundaries.
 - **D1 — package distribution surface:** build consumer-only `dist/src`, support Git installs through `prepare`, constrain packed files, and verify every public package export through the package boundary.
 
 See [`BUILD_LIST.md`](./BUILD_LIST.md) for the canonical roadmap.
@@ -67,3 +68,7 @@ Replay fences are retry-discipline evidence, not authority. Unknown external out
 Browser resilience evidence is recovery state, not browser authority; stale DOM is refused after navigation/capture failure, degraded receipts never fabricate page state, and recoverable does not mean automatically retryable.
 
 Package installation makes code available; it never grants authority. Distribution checks prove export/build integrity only, and V1 must consume the package boundary instead of repository source paths.
+
+## Graduation proof
+
+Run `npm run v1:proof` from an installed checkout. The harness packs the current package, extracts it into a temporary Agent0-style consumer, links only the already-installed declared Playwright runtime dependency (no registry/network access), and executes the deterministic vertical scenario through package imports. V1 closes only when the command emits `V1_AGENT0_VERTICAL_OK`.
