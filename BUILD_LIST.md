@@ -113,11 +113,17 @@ Checkbox law: mark an item complete only when the implementation is landed on ca
   - ENV and 0600 FILE projection targets are explicit and path-safe
   - revocation is one-way, SHA-256 predecessor-bound, and needs no widening authority
   - P4/P5 saved state may carry handles but can never self-authorize secret access
-- [ ] **W1 — Governed recipe compiler**
-  - declarative parameters, response schema, retries, and turn ceilings
-  - explicit required/optional/forbidden capability set
-  - compile recipe authority through P3 before P4/P5 execution
-  - fail closed when a declared workflow step lacks its required capability
+- [x] **W1 — Governed recipe compiler**
+  - bounded declarative parameters and response schema
+  - explicit max-turn and retry ceilings
+  - disjoint required / optional / forbidden capability sets
+  - required capability denial or unknown capability fails compilation closed
+  - optional denied capabilities become explicit `SKIPPED_OPTIONAL` steps
+  - forbidden capabilities never enter the effective plan even when ambient policy allows them
+  - every step must bind to a declared required/optional capability
+  - normalized recipe + compiled plan are SHA-256 fingerprinted/sealed
+  - pre-execution/resume authority recheck refuses revocation and never silently adopts newly granted optional authority
+  - compiled plans are bounded non-authority state intended to seed P4/P5 execution
 - [ ] **H1 — Capability invocation lifecycle**
   - stable tool-call identity across request / policy / start / result / failure
   - deterministic pre-tool policy hook and post-tool evidence hook
@@ -143,6 +149,7 @@ Checkbox law: mark an item complete only when the implementation is landed on ca
 - Adaptive web evidence remains evidence; crawl/XHR/stealth authority is explicit and never implies mutation or economic authority.
 - Human interrupt responses are typed data, not approvals or authority; resume is bound to the exact paused run state.
 - Secret handles are references, never credentials; materialization requires fresh current authority and raw secret bytes stay runtime-owned.
+- Recipe definitions declare workflow bounds; compiled plans are non-authority state and must be rechecked against current P3 policy before execution/resume.
 - Shared infrastructure stays provider/model neutral.
 - Prefer useful vertical capability cuts over framework ceremony.
 - Live economic authority remains outside this repository unless explicitly introduced through a separate governed boundary.

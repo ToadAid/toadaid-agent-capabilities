@@ -18,6 +18,7 @@ Implemented lanes:
 - **P9 — adaptive web intelligence:** deterministic extraction, confidence-gated adaptive element relocation, sealed resumable crawl checkpoints, guarded XHR evidence, and an isolated Scrapling worker boundary.
 - **P10 — governed human interrupts:** create typed durable human decision gates bound to exact P4 state, accept one schema-validated resolution, and produce a resume proof without turning human text into authority.
 - **P11 — scoped secret leases:** keep raw secret bytes outside agent state while binding opaque handles to owner/provider/profile scope, exact consumer capabilities, short-lived materialization grants, and path-safe projection targets.
+- **W1 — governed recipe compiler:** compile declarative parameters, response schemas, turn/retry ceilings, and explicit required/optional/forbidden capability sets through current P3 policy before P4/P5 execution.
 
 See [`BUILD_LIST.md`](./BUILD_LIST.md) for the canonical roadmap.
 
@@ -46,3 +47,5 @@ Adaptive web evidence never implies arbitrary HTTP, browser-action, stealth, or 
 Human interrupt responses are typed run data, never capability grants; resume requires the exact bound P4 state and a sealed resolved interrupt.
 
 Secret leases contain opaque broker handles, never secret bytes; materialization requires fresh secret and consumer authority, and revocation can only narrow access.
+
+Recipes declare workflow intent and capability bounds; compiled plans are tamper-evident non-authority state and must be rechecked against current P3 policy before execution or resume.
