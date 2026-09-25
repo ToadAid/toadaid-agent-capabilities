@@ -80,16 +80,18 @@ Checkbox law: mark an item complete only when the implementation is landed on ca
   - `browser:session` and `browser:session-persist` separate, both BLOCK by default
   - persistent state represented only by opaque owner/session-bound runtime reference
   - no shared authenticated browser state by default; P1/P2 remain fresh-context unless explicitly opted in
-- [ ] **P9 — Adaptive Web Intelligence**
-  - `web:extract` deterministic structured extraction
-  - `web:adaptive-locate` change-tolerant element identity + confidence threshold
-  - `web:crawl` bounded/resumable crawl worker
-  - `web:xhr-capture` explicit background API evidence
-  - isolated Scrapling adapter/worker; no direct sovereign MCP authority
-  - crawl checkpoints bound to P4/P5 continuity
-  - safe redirect/address-resolution hardening for SSRF-sensitive paths
-  - adaptive throttling / per-origin crawl budgets
-  - optional stealth fetch remains separate and BLOCK by default
+- [x] **P9 — Adaptive Web Intelligence**
+  - `web:extract` deterministic structured extraction with bounded declared fields
+  - `web:adaptive-locate` deterministic structural fingerprints, confidence threshold, and ambiguity refusal
+  - `web:crawl` sealed resumable crawl checkpoints bound to exact P4/P5 continuity hashes
+  - `web:xhr-capture` explicit guarded background API evidence; body hash-only by default
+  - isolated one-request/one-response Scrapling worker; no direct MCP or Python-shell authority
+  - HTTP GET-only redirect loop validates every target before following
+  - browser worker pre-navigation guard allows GET/HEAD only and separates top-level/resource origins
+  - private/local/reserved address refusal with worker DNS evidence and host-side verification
+  - per-origin crawl budgets, deduplication, depth/URL ceilings, and adaptive latency/429 backoff
+  - `web:stealth-fetch` remains separate and BLOCK by default
+  - resumable checkpoints refuse query/fragment URLs to avoid persisting tokens/secrets
 
 ## Standing design rules
 
@@ -101,6 +103,7 @@ Checkbox law: mark an item complete only when the implementation is landed on ca
 - Loop breakers may halt without authority; repair may fix syntax only and never invent semantics or authority.
 - Review inspection never implies review fixes; external review engines are deterministic evidence providers, not sovereign runtimes.
 - Browser session leases are owner/origin/expiry scoped; saved or persistent state never grants browser action authority.
+- Adaptive web evidence remains evidence; crawl/XHR/stealth authority is explicit and never implies mutation or economic authority.
 - Shared infrastructure stays provider/model neutral.
 - Prefer useful vertical capability cuts over framework ceremony.
 - Live economic authority remains outside this repository unless explicitly introduced through a separate governed boundary.

@@ -141,6 +141,31 @@ export const CORE_CAPABILITY_MANIFEST = createCapabilityManifest([
     description: "Apply explicitly selected review findings through governed workspace snapshot and diff boundaries.",
     defaultDecision: "BLOCK",
   },
+  {
+    id: "web:extract",
+    description: "Perform deterministic bounded structured extraction through an isolated web worker.",
+    defaultDecision: "BLOCK",
+  },
+  {
+    id: "web:adaptive-locate",
+    description: "Relocate changed web elements through bounded structural similarity scoring.",
+    defaultDecision: "BLOCK",
+  },
+  {
+    id: "web:crawl",
+    description: "Run bounded resumable web crawls with sealed continuity checkpoints and per-origin budgets.",
+    defaultDecision: "BLOCK",
+  },
+  {
+    id: "web:xhr-capture",
+    description: "Capture bounded background XHR/fetch evidence through a guarded browser worker.",
+    defaultDecision: "BLOCK",
+  },
+  {
+    id: "web:stealth-fetch",
+    description: "Permit optional stealth fetching only when separately authorized by current policy.",
+    defaultDecision: "BLOCK",
+  },
 ] as const);
 
 function capabilityMap(manifest: CapabilityManifest): ReadonlyMap<string, CapabilityDefinition> {
