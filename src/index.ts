@@ -161,6 +161,28 @@ export type {
   ReviewFixRequest,
   ReviewReflectionPacket,
 } from "./openCodeReviewAdapter.js";
+export {
+  assertBrowserSessionLeaseUsable,
+  browserSessionLeaseSha256,
+  createBrowserSessionLease,
+  normalizeBrowserSessionOrigins,
+  parseBrowserSessionLease,
+  revokeBrowserSessionLease,
+  sealBrowserSessionLease,
+  serializeBrowserSessionLease,
+  validateBrowserSessionLeaseEnvelope,
+} from "./browserSessionLease.js";
+export type {
+  BrowserSessionAuthorityBundle,
+  BrowserSessionBinding,
+  BrowserSessionLease,
+  BrowserSessionLeaseEnvelope,
+  BrowserSessionLeaseStatus,
+  BrowserSessionPersistence,
+  BrowserSessionRuntime,
+  BrowserSessionUseRequest,
+  CreateBrowserSessionLeaseInput,
+} from "./browserSessionLease.js";
 export type {
   BrowserEvidencePolicy,
   BrowserEvidenceReceipt,
