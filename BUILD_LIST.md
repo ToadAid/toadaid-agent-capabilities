@@ -171,8 +171,16 @@ Checkbox law: mark an item complete only when the implementation is landed on ca
   - deterministic semantic element IDs survive session/CDP index changes and strip href query/fragment data
   - recovery state remains non-authority; H1/Q1/X1 still govern lifecycle, budget, and replay
 
-## Pre-wiring integration proof
+## Pre-wiring distribution + integration proof
 
+- [x] **D1 — Package distribution surface**
+  - consumer build uses `tsconfig.build.json` so published/Git-installed output contains `dist/src` without compiled repository tests
+  - Git installs build through standard `prepare`; ordinary repository tests retain the full `tsconfig.json` path
+  - `files` allowlist constrains package payload to compiled distribution plus README/package metadata
+  - package verifier self-imports every declared public export through Node package self-reference
+  - `npm pack --dry-run` must contain every JS/declaration export target and refuse source/test/docs/workflow/script leakage
+  - package remains private during alpha; D1 does not publish, change repository access, or grant capability authority
+  - V1 must consume the package boundary rather than repository source paths
 - [ ] **V1 — Deterministic Agent0 vertical proof harness**
   - exercise W1 -> P4/P5 -> H1 -> real bounded capability -> receipt -> restart/resume
   - recorded/deterministic model and tool fixtures for replayable regression tests
@@ -197,6 +205,7 @@ Checkbox law: mark an item complete only when the implementation is landed on ca
 - Recipe definitions declare workflow bounds; compiled plans are non-authority state and must be rechecked against current P3 policy before execution/resume.
 - Invocation lifecycle evidence never becomes authority; fresh policy checks govern start/resume and already-started work requires reconciliation before replay.
 - Budgets, capability contracts, and replay fences bound execution economics/compatibility/retries without granting new authority.
+- Package distribution proves build/export integrity only; installation never implies P3 authority and V1 consumes package exports rather than source paths.
 - Shared infrastructure stays provider/model neutral.
 - Prefer useful vertical capability cuts over framework ceremony.
 - Live economic authority remains outside this repository unless explicitly introduced through a separate governed boundary.

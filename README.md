@@ -24,7 +24,7 @@ Implemented lanes:
 - **C1 — capability contract + version discovery:** discover self-describing capability contracts, prove major/minor/feature compatibility before contract-aware W1 compile and H1 start, and bind compiled/runtime use to exact descriptor provenance.
 - **X1 — idempotency / replay fence:** classify logical invocations before start, bind deterministic replay identity, and require reconciliation proof before retrying uncertain side effects.
 - **B1 — browser resilience hardening:** invalidate stale DOM across navigation/failure, emit degraded evidence instead of fabricated state, distinguish same-document/full-document readiness, bound truncation, and provide deterministic semantic element IDs.
-- **X1 — idempotency / replay fence:** classify replay safety before start, bind deterministic idempotency keys to logical invocation identity, and require explicit reconciliation before uncertain external outcomes can be retried.
+- **D1 — package distribution surface:** build consumer-only `dist/src`, support Git installs through `prepare`, constrain packed files, and verify every public package export through the package boundary.
 
 See [`BUILD_LIST.md`](./BUILD_LIST.md) for the canonical roadmap.
 
@@ -65,3 +65,5 @@ Capability contract discovery is compatibility evidence, not authority. Contract
 Replay fences are retry-discipline evidence, not authority. Unknown external outcomes remain blocked until reconciliation; non-replayable mutations never become replayable merely because a transport timed out.
 
 Browser resilience evidence is recovery state, not browser authority; stale DOM is refused after navigation/capture failure, degraded receipts never fabricate page state, and recoverable does not mean automatically retryable.
+
+Package installation makes code available; it never grants authority. Distribution checks prove export/build integrity only, and V1 must consume the package boundary instead of repository source paths.
