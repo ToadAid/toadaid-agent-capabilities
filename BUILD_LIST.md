@@ -222,7 +222,7 @@ Checkbox law: mark an item complete only when the implementation is landed on ca
   - review presentation state may evolve separately from immutable review evidence
   - R1 fix authority remains independently governed; resume continuity never implies permission to mutate
 
-- [ ] **P14 — Governed capability module lifecycle**
+- [x] **P14 — Governed capability module lifecycle**
   - explicit module manifest binds module ID, version, capability IDs, contract descriptors, implementation fingerprints, and owned runtime resources
   - installation makes code available only; installed / enabled / authorized remain separate states
   - install/update/remove operations are explicit lifecycle transitions with bounded receipts

@@ -29,6 +29,7 @@ Implemented lanes:
 - **D1 — package distribution surface:** build consumer-only `dist/src`, support Git installs through `prepare`, constrain packed files, and verify every public package export through the package boundary.
 - **P12 — governed connector adapter boundary:** invoke provider-specific adapters only from an already-started H1 invocation whose capability/tool/intent/arguments and exact current C1 descriptor + implementation binding still match; connector receipts retain hashes/provenance without becoming authority.
 - **P13 — governed connector outcome + reconciliation bridge:** require an exact X1 replay fence before provider entry, preserve pre-dispatch refusals, bind successful P12 receipts to replay classification, and turn any post-entry throw/malformed result into explicit `BLOCKED_PENDING_RECONCILIATION` without automatic retry or H1 completion.
+- **P14 — governed capability module lifecycle:** bind module identity/version to exact P3 capability defaults, C1 descriptors, P12 adapter registrations, and owned-resource fingerprints; installation starts disabled, enablement never grants P3 authority, and update/remove refuse dirty owned state.
 
 See [`BUILD_LIST.md`](./BUILD_LIST.md) for the canonical roadmap.
 
@@ -77,6 +78,8 @@ Package installation makes code available; it never grants authority. Distributi
 Connector adapters are runtime implementations, not grants. P12 only invokes an adapter after exact H1/C1 identity and argument binding; provider-specific code cannot widen authority, silently swap implementation provenance, materialize secrets, or claim invocation completion on its own.
 
 Connector execution uncertainty is evidence, not permission to retry. P13 requires X1 replay classification before provider entry and converts any post-entry ambiguity into reconciliation while leaving H1 active; only X1 reconciliation may later determine whether retry, no retry, or a new invocation is required.
+
+Capability-module lifecycle is availability state, not authority. P14 requires module-owned capabilities to default `BLOCK`, separates installed / enabled / authorized states, binds C1 + P12 registration provenance, and permits update/removal only from exact clean module-owned resource state; it never executes arbitrary installer shell or grants policy permission.
 
 ## Graduation proof
 
