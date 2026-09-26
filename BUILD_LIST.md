@@ -214,7 +214,7 @@ Checkbox law: mark an item complete only when the implementation is landed on ca
   - uncertain outcomes open X1 `BLOCKED_PENDING_RECONCILIATION` with bounded error class + SHA-256 fingerprint only
   - no automatic retry/replay, H1 completion, budget mutation, secret materialization, or authority widening
 
-- [ ] **R2 — Review session identity + resume lineage**
+- [x] **R2 — Review session identity + resume lineage**
   - bind review resume to exact repository identity, reviewed-source SHA, resolved-rule/config SHA, review mode, and R1 review-plan SHA
   - same-session resume refuses changed repository/source/rules instead of silently adopting new review truth
   - provider/model changes require explicit transition and produce parent -> child lineage evidence

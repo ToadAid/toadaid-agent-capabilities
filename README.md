@@ -14,6 +14,7 @@ Implemented lanes:
 - **P6 — workspace Time Travel:** capture immutable content-addressed snapshots, deterministic diffs, governed restore, and bounded history maintenance outside project Git.
 - **P7 — loop breaker + bounded repair:** fingerprint repeated failures, stop bounded loops, and optionally perform syntax-only tool-call repair without inventing semantics or authority.
 - **R1 — OpenCodeReview adapter:** bind OCR Delegation Mode into deterministic review planning, mandatory coverage, P5 reviewer/reflection specs, and a separately authorized P6-backed fix boundary.
+- **R2 — review session identity + resume lineage:** bind resumed review work to exact repository/source/rules/R1-plan evidence, require explicit provider/model transitions with predecessor lineage, and keep presentation state outside immutable review-session evidence.
 - **P8 — scoped browser sessions:** bind optional browser state to explicit owner/origin/expiry leases while keeping persistent state behind separate authority.
 - **P9 — adaptive web intelligence:** deterministic extraction, confidence-gated adaptive element relocation, sealed resumable crawl checkpoints, guarded XHR evidence, and an isolated Scrapling worker boundary.
 - **P10 — governed human interrupts:** create typed durable human decision gates bound to exact P4 state, accept one schema-validated resolution, and produce a resume proof without turning human text into authority.
@@ -48,6 +49,8 @@ Workspace history never lives inside or rewrites project Git.
 Loop breakers may halt work as a safety invariant; bounded repair requires explicit authority and never invents semantics or authority.
 
 Review inspection never implies review fixes, and external review engines never receive sovereign runtime authority.
+
+Review resume lineage is provenance, not permission. R2 may prove that a resumed review is bound to the same repository/source/rules/plan and explicitly record a provider/model transition, but it never grants `review:inspect`, `review:fix`, or workspace mutation authority.
 
 Browser session leases never imply browser action authority, and persistent authenticated state is never ambient or shared by default.
 

@@ -162,6 +162,31 @@ export type {
   ReviewReflectionPacket,
 } from "./openCodeReviewAdapter.js";
 export {
+  assertReviewSessionPredecessor,
+  createReviewPresentationState,
+  createReviewSession,
+  parseReviewSession,
+  resumeReviewSession,
+  reviewSessionRecordSha256,
+  sealReviewSessionRecord,
+  serializeReviewSession,
+  validateReviewSessionEnvelope,
+  validateReviewSessionRecord,
+} from "./reviewSession.js";
+export type {
+  CreateReviewPresentationStateInput,
+  CreateReviewSessionInput,
+  ResumeReviewSessionInput,
+  ReviewPresentationState,
+  ReviewRuntimeIdentity,
+  ReviewSessionBinding,
+  ReviewSessionEnvelope,
+  ReviewSessionLineage,
+  ReviewSessionRecord,
+  ReviewSessionRuntime,
+  ReviewSessionTransition,
+} from "./reviewSessionTypes.js";
+export {
   assertBrowserSessionLeaseUsable,
   browserSessionLeaseSha256,
   createBrowserSessionLease,
