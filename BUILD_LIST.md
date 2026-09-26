@@ -231,7 +231,7 @@ Checkbox law: mark an item complete only when the implementation is landed on ca
   - pre-install/security inspection is evidence, not a trust grant
   - no arbitrary dynamic plugin execution, shell-string installer authority, or implicit P3/C1 registration
 
-- [ ] **P9B — Governed reusable web-session hygiene**
+- [x] **P9B — Governed reusable web-session hygiene**
   - pooled/reusable browser state remains behind explicit P8 session authority
   - every request reapplies its exact timeout/header/resource/network policy instead of inheriting prior request settings
   - effective per-request settings are fingerprinted so reuse cannot silently widen behavior

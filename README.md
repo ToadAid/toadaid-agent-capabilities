@@ -30,6 +30,7 @@ Implemented lanes:
 - **P12 — governed connector adapter boundary:** invoke provider-specific adapters only from an already-started H1 invocation whose capability/tool/intent/arguments and exact current C1 descriptor + implementation binding still match; connector receipts retain hashes/provenance without becoming authority.
 - **P13 — governed connector outcome + reconciliation bridge:** require an exact X1 replay fence before provider entry, preserve pre-dispatch refusals, bind successful P12 receipts to replay classification, and turn any post-entry throw/malformed result into explicit `BLOCKED_PENDING_RECONCILIATION` without automatic retry or H1 completion.
 - **P14 — governed capability module lifecycle:** bind module identity/version to exact P3 capability defaults, C1 descriptors, P12 adapter registrations, and owned-resource fingerprints; installation starts disabled, enablement never grants P3 authority, and update/remove refuse dirty owned state.
+- **P9B — governed reusable web-session hygiene:** keep pooling behind current P8 lease authority, reset and reapply exact per-request settings on every checkout, fingerprint effective policy, quarantine errored/poisoned pages, and keep anonymous one-shot work separate from persistent authenticated state.
 
 See [`BUILD_LIST.md`](./BUILD_LIST.md) for the canonical roadmap.
 
@@ -80,6 +81,8 @@ Connector adapters are runtime implementations, not grants. P12 only invokes an 
 Connector execution uncertainty is evidence, not permission to retry. P13 requires X1 replay classification before provider entry and converts any post-entry ambiguity into reconciliation while leaving H1 active; only X1 reconciliation may later determine whether retry, no retry, or a new invocation is required.
 
 Capability-module lifecycle is availability state, not authority. P14 requires module-owned capabilities to default `BLOCK`, separates installed / enabled / authorized states, binds C1 + P12 registration provenance, and permits update/removal only from exact clean module-owned resource state; it never executes arbitrary installer shell or grants policy permission.
+
+Reusable browser state is an optimization, not permission. P9B rechecks P8 on checkout and before returning persistent state to the pool, forces reset-before-apply for every request, fingerprints the exact effective timeout/header/resource/network policy, refuses sensitive authentication headers, and quarantines any errored, poisoned, stale-authority, or stale-lease page instead of reusing it.
 
 ## Graduation proof
 

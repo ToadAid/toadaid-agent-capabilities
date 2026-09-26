@@ -209,6 +209,36 @@ export type {
   CreateBrowserSessionLeaseInput,
 } from "./browserSessionLease.js";
 export {
+  finalizeReusableBrowserRequest,
+  normalizeReusableBrowserRequestPolicy,
+  prepareReusableBrowserRequest,
+  validateReusableBrowserPoolCandidate,
+  validateReusableBrowserPreparationReceipt,
+} from "./browserSessionReuse.js";
+export type {
+  FinalizeReusableBrowserRequestInput,
+  NormalizedReusableBrowserRequestPolicy,
+  PrepareReusableBrowserRequestInput,
+  ReusableBrowserDisposition,
+  ReusableBrowserDispositionReason,
+  ReusableBrowserCandidateClaimReceipt,
+  ReusableBrowserDispositionReceipt,
+  ReusableBrowserExecutionOutcome,
+  ReusableBrowserExecutionStatus,
+  ReusableBrowserHeader,
+  ReusableBrowserPageHealth,
+  ReusableBrowserPolicyApplyReceipt,
+  ReusableBrowserPoolCandidate,
+  ReusableBrowserPreparationReceipt,
+  ReusableBrowserRequestPolicy,
+  ReusableBrowserResetReceipt,
+  ReusableBrowserResourceType,
+  ReusableBrowserRuntime,
+  ReusableBrowserRuntimeAdapter,
+  ReusableBrowserRuntimeIdentity,
+  ReusableBrowserSessionMode,
+} from "./browserSessionReuseTypes.js";
+export {
   advanceCrawlCheckpoint,
   assertCrawlCheckpointBinding,
   assertCrawlCheckpointPredecessor,
