@@ -356,3 +356,17 @@ export type {
   NormalizedBrowserEvidencePolicy,
   NormalizedBrowserInteractionPolicy,
 } from "./contracts.js";
+export {
+  connectorAdapterRegistrationSha256,
+  invokeGovernedConnectorAdapter,
+  normalizeConnectorAdapterRegistration,
+} from "./connectorAdapter.js";
+export type {
+  ConnectorAdapterInvocationReceipt,
+  ConnectorAdapterInvocationRequest,
+  ConnectorAdapterInvocationResult,
+  ConnectorAdapterRegistration,
+  ConnectorJsonValue,
+  GovernedConnectorAdapter,
+  GovernedConnectorInvocationInput,
+} from "./connectorAdapterTypes.js";

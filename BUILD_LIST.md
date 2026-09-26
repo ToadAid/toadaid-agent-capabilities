@@ -193,6 +193,18 @@ Checkbox law: mark an item complete only when the implementation is landed on ca
   - 2026-09-25 TNG clean-room proof emitted `PACKAGE_DISTRIBUTION_OK exports=6 files=146` then `V1_AGENT0_VERTICAL_OK` with `packageResolvedFromConsumer=true`, `secretHandleOnly=true`, `nonReplayableDisposition=NEW_INVOCATION_REQUIRED`, and post-restart browser authority `BLOCK`
   - capability library is integration-ready after this clean-room vertical proof closure
 
+## Post-graduation integration lane
+
+- [x] **P12 — Governed connector adapter boundary**
+  - explicit adapter registration binds adapter ID, capability ID, tool name, contract ID, C1 descriptor SHA, and implementation fingerprint
+  - adapter invocation requires an H1 invocation already in `STARTED`; installed connector code never self-authorizes
+  - exact current C1 compatibility, invocation binding, and contract-ready receipt must match the started invocation
+  - exact H1 intent, tool identity, and arguments SHA prevent connector-call substitution after authorization
+  - connector arguments/results are bounded immutable plain JSON; adapter receives a frozen request
+  - receipt carries hashes/provenance only; raw result remains outside the receipt
+  - no dynamic plugin loading, shell-string execution, secret materialization, retry, H1 completion, budget mutation, or authority widening occurs inside the adapter bridge
+  - provider-specific connectors may implement the interface without changing the shared governance spine
+
 ## Standing design rules
 
 - Capabilities are explicit; authority is not ambient.
