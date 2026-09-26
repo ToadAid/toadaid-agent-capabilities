@@ -370,3 +370,14 @@ export type {
   GovernedConnectorAdapter,
   GovernedConnectorInvocationInput,
 } from "./connectorAdapterTypes.js";
+export {
+  executeGovernedConnectorInvocation,
+} from "./connectorExecution.js";
+export type {
+  ConnectorExecutionReconciliationRequired,
+  ConnectorExecutionSuccess,
+  GovernedConnectorExecutionAdapter,
+  GovernedConnectorExecutionInput,
+  GovernedConnectorExecutionOutcome,
+  GovernedConnectorExecutionRuntime,
+} from "./connectorExecutionTypes.js";

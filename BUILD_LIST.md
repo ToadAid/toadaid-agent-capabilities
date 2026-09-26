@@ -205,7 +205,7 @@ Checkbox law: mark an item complete only when the implementation is landed on ca
   - no dynamic plugin loading, shell-string execution, secret materialization, retry, H1 completion, budget mutation, or authority widening occurs inside the adapter bridge
   - provider-specific connectors may implement the interface without changing the shared governance spine
 
-- [ ] **P13 — Governed connector outcome + reconciliation bridge**
+- [x] **P13 — Governed connector outcome + reconciliation bridge**
   - exact X1 replay fence must match run / invocation / capability / intent before provider adapter entry
   - pre-dispatch P12 validation refusal remains a refusal and never fabricates an uncertain external outcome
   - successful provider execution binds the exact replay-fence SHA and P12 adapter-receipt SHA while leaving H1 completion to the caller
