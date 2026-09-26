@@ -205,6 +205,48 @@ Checkbox law: mark an item complete only when the implementation is landed on ca
   - no dynamic plugin loading, shell-string execution, secret materialization, retry, H1 completion, budget mutation, or authority widening occurs inside the adapter bridge
   - provider-specific connectors may implement the interface without changing the shared governance spine
 
+- [ ] **P13 — Governed connector outcome + reconciliation bridge**
+  - exact X1 replay fence must match run / invocation / capability / intent before provider adapter entry
+  - pre-dispatch P12 validation refusal remains a refusal and never fabricates an uncertain external outcome
+  - successful provider execution binds the exact replay-fence SHA and P12 adapter-receipt SHA while leaving H1 completion to the caller
+  - once provider adapter code is entered, thrown errors are conservatively treated as uncertain external outcomes
+  - malformed or non-JSON provider results after adapter entry are also reconciliation-required because an external side effect may already have occurred
+  - uncertain outcomes open X1 `BLOCKED_PENDING_RECONCILIATION` with bounded error class + SHA-256 fingerprint only
+  - no automatic retry/replay, H1 completion, budget mutation, secret materialization, or authority widening
+
+- [ ] **R2 — Review session identity + resume lineage**
+  - bind review resume to exact repository identity, reviewed-source SHA, resolved-rule/config SHA, review mode, and R1 review-plan SHA
+  - same-session resume refuses changed repository/source/rules instead of silently adopting new review truth
+  - provider/model changes require explicit transition and produce parent -> child lineage evidence
+  - model/provider lineage is provenance only and never grants review/fix authority
+  - review presentation state may evolve separately from immutable review evidence
+  - R1 fix authority remains independently governed; resume continuity never implies permission to mutate
+
+- [ ] **P14 — Governed capability module lifecycle**
+  - explicit module manifest binds module ID, version, capability IDs, contract descriptors, implementation fingerprints, and owned runtime resources
+  - installation makes code available only; installed / enabled / authorized remain separate states
+  - install/update/remove operations are explicit lifecycle transitions with bounded receipts
+  - updates refuse dirty/local-conflict state rather than overwriting operator changes
+  - removal may stop only module-owned runtime resources and must not delete unrelated state
+  - pre-install/security inspection is evidence, not a trust grant
+  - no arbitrary dynamic plugin execution, shell-string installer authority, or implicit P3/C1 registration
+
+- [ ] **P9B — Governed reusable web-session hygiene**
+  - pooled/reusable browser state remains behind explicit P8 session authority
+  - every request reapplies its exact timeout/header/resource/network policy instead of inheriting prior request settings
+  - effective per-request settings are fingerprinted so reuse cannot silently widen behavior
+  - errored/poisoned pages are quarantined or evicted rather than returned to the reusable pool
+  - one-shot anonymous operations remain separate from persistent authenticated-session operations
+  - reuse is an optimization only; it never grants browser, secret, or economic authority
+
+- [ ] **P15 — Scoped host-connector session lease**
+  - host connection identity is distinct from permission to read files, write files, execute commands, invoke tools, or use MCP/skills
+  - lease binds exact host/session/owner plus an explicit narrow capability set and expiry
+  - permissions may be narrowed or revoked without disconnecting unrelated host capabilities
+  - persistent configuration is evidence only; each active use rechecks current P3 authority
+  - remote execution, filesystem mutation, tool invocation, and connector use remain separately scoped
+  - host attachment never becomes ambient machine authority
+
 ## Standing design rules
 
 - Capabilities are explicit; authority is not ambient.
