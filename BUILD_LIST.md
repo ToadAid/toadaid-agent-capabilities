@@ -247,6 +247,37 @@ Checkbox law: mark an item complete only when the implementation is landed on ca
   - remote execution, filesystem mutation, tool invocation, and connector use remain separately scoped
   - host attachment never becomes ambient machine authority
 
+- [ ] **P16 — Governed desktop observation**
+  - split read-only host observation into explicit `host:display-inventory`, `host:screenshot`, `host:ui-snapshot`, and `host:wait-for` capability contracts
+  - observation requires a live P15 host/session lease plus fresh P3/C1/H1 authority; machine attachment alone never grants visibility
+  - screenshots may be scoped to exact display(s) or bounded desktop regions so unrelated screen content is not captured by default
+  - rich UI snapshots expose bounded accessibility/DOM-derived element evidence separately from fast screenshot-only capture
+  - every observation binds exact host/session, display/window identity, observation epoch, capture parameters, and evidence SHA-256
+  - `host:wait-for` performs bounded local polling for declared UI conditions with explicit timeout/interval ceilings and Q1 accounting rather than burning repeated model turns
+  - capture failure produces typed `DEGRADED` evidence and invalidates dependent element references; stale observation state is never silently reused
+  - observation artifacts and element metadata are evidence only and never grant click/type/filesystem/shell or other mutation authority
+
+- [ ] **P17 — Governed desktop interaction**
+  - split desktop mutation into explicit `host:pointer-click`, `host:pointer-move`, `host:scroll`, `host:text-input`, and `host:shortcut` contracts; no omnibus `computer-control` capability
+  - every interaction requires a live P15 lease plus fresh P3/C1/H1 authority for the exact action capability
+  - semantic UI element references bind to the exact P16 host/session/window/observation epoch that produced them; navigation, focus/window replacement, or fresh incompatible observation makes old references stale
+  - coordinate actions require bounded finite coordinates inside the authorized display/region and never silently retarget another monitor/window
+  - text-input authority is separate from pointer authority; secret/password entry remains separately governed and cannot be inferred from ordinary text-input permission
+  - click/type/drag/shortcut operations are classified through X1 before dispatch; uncertain external outcomes require reconciliation rather than blind replay
+  - interaction receipts bind intent, target evidence SHA, action parameters hash, resulting observation reference when available, and bounded error provenance without persisting raw sensitive text
+  - interaction state never widens filesystem, process, registry, command, network, economic, or provider authority
+
+- [ ] **P18 — Governed host service capabilities**
+  - expose host services as narrow contracts such as `host:app-launch`, `host:clipboard-read`, `host:clipboard-write`, `host:process-read`, `host:process-stop`, `host:file-read`, `host:file-write`, `host:notification`, `host:registry-read`, `host:registry-write`, and `host:command-exec`
+  - read/write/destructive surfaces remain distinct even when the underlying OS adapter implements them in one module
+  - filesystem capabilities require explicit bounded path scope with canonicalization, traversal/symlink escape refusal, and separate read vs mutation authority
+  - process-stop, registry-write, file-write, and command execution are mutation capabilities with X1 replay classification and reconciliation on uncertain outcomes
+  - `host:command-exec` accepts structured executable + argv + bounded cwd/env policy; no ambient shell-string authority or implicit elevation
+  - app launch/control, clipboard, process, registry, filesystem, command, and notification use each recheck the live P15 lease and current P3/C1/H1 authority
+  - adapters run with least available host privilege and never convert the connected user's OS permissions into automatic agent permissions
+  - P14 module lifecycle may install an OS-specific implementation, but installation/enabled state never authorizes any P18 service
+  - host-service receipts remain bounded provenance/evidence; raw clipboard data, command output, secrets, and file contents stay outside authority state
+
 ## Standing design rules
 
 - Capabilities are explicit; authority is not ambient.
@@ -264,6 +295,9 @@ Checkbox law: mark an item complete only when the implementation is landed on ca
 - Invocation lifecycle evidence never becomes authority; fresh policy checks govern start/resume and already-started work requires reconciliation before replay.
 - Budgets, capability contracts, and replay fences bound execution economics/compatibility/retries without granting new authority.
 - Package distribution proves build/export integrity only; installation never implies P3 authority and V1 consumes package exports rather than source paths.
+- Host attachment grants connectivity, not machine authority; observation, interaction, filesystem, process, registry, and command execution remain separately authorized.
+- Desktop observation is evidence only; element references expire with their bound observation/window epoch and can never self-authorize interaction.
+- Desktop interaction is narrowly capability-scoped; pointer/text/shortcut authority never implies host-service, secret, economic, or provider authority.
 - Shared infrastructure stays provider/model neutral.
 - Prefer useful vertical capability cuts over framework ceremony.
 - Live economic authority remains outside this repository unless explicitly introduced through a separate governed boundary.
