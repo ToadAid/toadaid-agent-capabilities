@@ -137,6 +137,10 @@ export interface DesktopObservationArtifactReference {
 export interface DesktopObservationElementEvidence {
   readonly elementId: string;
   readonly evidenceSha256: string;
+  readonly inputSecurity:
+    | "ORDINARY_TEXT"
+    | "SECRET_OR_PASSWORD"
+    | "UNKNOWN";
 }
 
 export interface DesktopObservedElementReference {
@@ -149,6 +153,10 @@ export interface DesktopObservedElementReference {
   readonly observationEpoch: string;
   readonly observationEvidenceSha256: string;
   readonly elementEvidenceSha256: string;
+  readonly inputSecurity:
+    | "ORDINARY_TEXT"
+    | "SECRET_OR_PASSWORD"
+    | "UNKNOWN";
 }
 
 export interface DesktopObservationAdapterRegistration {
@@ -227,6 +235,10 @@ export interface DesktopObservationHeadRuntime {
       windowId: string;
     }>,
   ): DesktopObservationHead | null;
+  claimCurrentObservationHead(
+    expected: DesktopObservationHead,
+    next: DesktopObservationHead,
+  ): boolean;
 }
 
 export interface DesktopObservationRuntime {

@@ -257,11 +257,11 @@ Checkbox law: mark an item complete only when the implementation is landed on ca
   - capture failure produces typed `DEGRADED` evidence and invalidates dependent element references; stale observation state is never silently reused
   - observation artifacts and element metadata are evidence only and never grant click/type/filesystem/shell or other mutation authority
 
-- [ ] **P17 — Governed desktop interaction**
+- [x] **P17 — Governed desktop interaction**
   - split desktop mutation into explicit `host:pointer-click`, `host:pointer-move`, `host:scroll`, `host:text-input`, and `host:shortcut` contracts; no omnibus `computer-control` capability
   - every interaction requires a live P15 lease plus fresh P3/C1/H1 authority for the exact action capability
   - semantic UI element references bind to the exact P16 host/session/window/observation epoch that produced them; navigation, focus/window replacement, or fresh incompatible observation makes old references stale
-  - coordinate actions require bounded finite coordinates inside the authorized display/region and never silently retarget another monitor/window
+  - coordinate actions require bounded finite coordinates inside the authorized display/region and never silently retarget another monitor/window; v1 raw coordinates require an explicit bounded region unless display geometry is separately proven
   - text-input authority is separate from pointer authority; secret/password entry remains separately governed and cannot be inferred from ordinary text-input permission
   - click/type/drag/shortcut operations are classified through X1 before dispatch; uncertain external outcomes require reconciliation rather than blind replay
   - interaction receipts bind intent, target evidence SHA, action parameters hash, resulting observation reference when available, and bounded error provenance without persisting raw sensitive text

@@ -272,6 +272,8 @@ function makeContext(
                   elementId: "button-save",
                   evidenceSha256:
                     "2".repeat(64),
+                  inputSecurity:
+                    "ORDINARY_TEXT",
                 },
               ],
             }
@@ -320,6 +322,27 @@ function makeContext(
         ),
         head,
       );
+    },
+    claimCurrentObservationHead(
+      expected: DesktopObservationHead,
+      next: DesktopObservationHead,
+    ) {
+      const key = observationHeadKey(
+        expected.hostId,
+        expected.sessionId,
+        expected.windowId,
+      );
+      const current =
+        observationHeads.get(key) ?? null;
+      if (
+        current === null ||
+        JSON.stringify(current) !==
+          JSON.stringify(expected)
+      ) {
+        return false;
+      }
+      observationHeads.set(key, next);
+      return true;
     },
     resolveCurrentObservationHead(
       identity: Readonly<{
@@ -673,6 +696,18 @@ test("P16 UI element references bind exact observation/window epoch and stale af
       ctx.observationHeadRuntime,
     ),
   );
+  assert.throws(
+    () =>
+      assertDesktopElementReferenceCurrent(
+        {
+          ...element,
+          inputSecurity: "SECRET_OR_PASSWORD",
+        },
+        first.receipt,
+        ctx.observationHeadRuntime,
+      ),
+    /not present in current observation/,
+  );
 
   const second = await observeGovernedDesktop(
     ctx.adapter,
@@ -865,6 +900,8 @@ test("P16 rejects artifact-kind confusion and windowless reusable UI element evi
             {
               elementId: "button-save",
               evidenceSha256: "4".repeat(64),
+              inputSecurity:
+                "ORDINARY_TEXT",
             },
           ],
         };

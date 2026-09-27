@@ -11,7 +11,12 @@ export type HostConnectorActionCapabilityId =
   | "host:display-inventory"
   | "host:screenshot"
   | "host:ui-snapshot"
-  | "host:wait-for";
+  | "host:wait-for"
+  | "host:pointer-click"
+  | "host:pointer-move"
+  | "host:scroll"
+  | "host:text-input"
+  | "host:shortcut";
 
 export type HostConnectorSessionLeaseStatus =
   | "ACTIVE"

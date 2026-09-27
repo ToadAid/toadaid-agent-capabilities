@@ -794,6 +794,16 @@ function normalizeElementEvidence(
       );
     }
     seen.add(elementId);
+    const inputSecurity = raw.inputSecurity;
+    if (
+      inputSecurity !== "ORDINARY_TEXT" &&
+      inputSecurity !== "SECRET_OR_PASSWORD" &&
+      inputSecurity !== "UNKNOWN"
+    ) {
+      throw new TypeError(
+        `elements[${index}].inputSecurity is invalid`,
+      );
+    }
     return Object.freeze({
       elementId,
       evidenceSha256:
@@ -801,6 +811,7 @@ function normalizeElementEvidence(
           raw.evidenceSha256 as string,
           `elements[${index}].evidenceSha256`,
         )!,
+      inputSecurity,
     });
   });
   normalized.sort((a, b) =>
@@ -1042,6 +1053,7 @@ function observedElementRefs(
           result.evidenceSha256,
         elementEvidenceSha256:
           element.evidenceSha256,
+        inputSecurity: element.inputSecurity,
       }),
     ),
   );
@@ -1105,6 +1117,23 @@ function observationHead(
   });
 }
 
+function sameObservationHead(
+  left: DesktopObservationHead | null,
+  right: DesktopObservationHead,
+): boolean {
+  return (
+    left !== null &&
+    left.schemaVersion === right.schemaVersion &&
+    left.hostId === right.hostId &&
+    left.sessionId === right.sessionId &&
+    left.windowId === right.windowId &&
+    left.observationEpoch === right.observationEpoch &&
+    left.status === right.status &&
+    left.evidenceSha256 === right.evidenceSha256 &&
+    left.receiptSha256 === right.receiptSha256
+  );
+}
+
 function publishObservationHead(
   runtime: DesktopObservationHeadRuntime,
   status: DesktopObservationHead["status"],
@@ -1114,14 +1143,41 @@ function publishObservationHead(
   receiptSha256: string | null,
 ): void {
   if (request.windowId === null) return;
-  runtime.publishCurrentObservationHead(
-    observationHead(
-      status,
-      request,
-      observationEpoch,
-      evidenceSha256,
-      receiptSha256,
-    ),
+
+  const next = observationHead(
+    status,
+    request,
+    observationEpoch,
+    evidenceSha256,
+    receiptSha256,
+  );
+
+  if (status === "PENDING") {
+    runtime.publishCurrentObservationHead(next);
+    const current =
+      runtime.resolveCurrentObservationHead({
+        hostId: next.hostId,
+        sessionId: next.sessionId,
+        windowId: next.windowId,
+      });
+    if (!sameObservationHead(current, next)) {
+      throw new Error(
+        "desktop observation PENDING head was not published as current",
+      );
+    }
+    return;
+  }
+
+  const expected = observationHead(
+    "PENDING",
+    request,
+    observationEpoch,
+    null,
+    null,
+  );
+  runtime.claimCurrentObservationHead(
+    expected,
+    next,
   );
 }
 
@@ -1206,7 +1262,9 @@ export function assertDesktopElementReferenceCurrent(
       (item) =>
         item.elementId === reference.elementId &&
         item.elementEvidenceSha256 ===
-          reference.elementEvidenceSha256,
+          reference.elementEvidenceSha256 &&
+        item.inputSecurity ===
+          reference.inputSecurity,
     )
   ) {
     throw new Error(

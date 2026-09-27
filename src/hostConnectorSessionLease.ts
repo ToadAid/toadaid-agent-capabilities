@@ -35,6 +35,11 @@ export const HOST_CONNECTOR_ACTION_CAPABILITIES:
     "host:screenshot",
     "host:ui-snapshot",
     "host:wait-for",
+    "host:pointer-click",
+    "host:pointer-move",
+    "host:scroll",
+    "host:text-input",
+    "host:shortcut",
   ]);
 
 const HOST_ACTION_CAPABILITY_SET = new Set<string>(

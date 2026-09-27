@@ -157,6 +157,31 @@ export const CORE_CAPABILITY_MANIFEST = createCapabilityManifest([
     defaultDecision: "BLOCK",
   },
   {
+    id: "host:pointer-click",
+    description: "Dispatch a bounded pointer click against current governed desktop evidence.",
+    defaultDecision: "BLOCK",
+  },
+  {
+    id: "host:pointer-move",
+    description: "Move the pointer only against current governed desktop evidence and explicit scope.",
+    defaultDecision: "BLOCK",
+  },
+  {
+    id: "host:scroll",
+    description: "Scroll an exact governed desktop window under bounded deltas.",
+    defaultDecision: "BLOCK",
+  },
+  {
+    id: "host:text-input",
+    description: "Enter bounded ordinary non-secret text into an exact governed UI element.",
+    defaultDecision: "BLOCK",
+  },
+  {
+    id: "host:shortcut",
+    description: "Dispatch a bounded explicit keyboard shortcut against an exact governed window.",
+    defaultDecision: "BLOCK",
+  },
+  {
     id: "workspace:snapshot",
     description: "Capture a bounded immutable workspace snapshot in external history storage.",
     defaultDecision: "BLOCK",
