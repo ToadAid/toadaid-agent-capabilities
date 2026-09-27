@@ -247,7 +247,7 @@ Checkbox law: mark an item complete only when the implementation is landed on ca
   - remote execution, filesystem mutation, tool invocation, and connector use remain separately scoped
   - host attachment never becomes ambient machine authority
 
-- [ ] **P16 — Governed desktop observation**
+- [x] **P16 — Governed desktop observation**
   - split read-only host observation into explicit `host:display-inventory`, `host:screenshot`, `host:ui-snapshot`, and `host:wait-for` capability contracts
   - observation requires a live P15 host/session lease plus fresh P3/C1/H1 authority; machine attachment alone never grants visibility
   - screenshots may be scoped to exact display(s) or bounded desktop regions so unrelated screen content is not captured by default

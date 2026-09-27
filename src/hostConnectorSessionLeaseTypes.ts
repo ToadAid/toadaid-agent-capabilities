@@ -7,7 +7,11 @@ export type HostConnectorActionCapabilityId =
   | "host:filesystem-write"
   | "host:command-execute"
   | "host:tool-invoke"
-  | "host:connector-use";
+  | "host:connector-use"
+  | "host:display-inventory"
+  | "host:screenshot"
+  | "host:ui-snapshot"
+  | "host:wait-for";
 
 export type HostConnectorSessionLeaseStatus =
   | "ACTIVE"

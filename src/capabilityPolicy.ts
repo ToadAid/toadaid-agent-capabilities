@@ -137,6 +137,26 @@ export const CORE_CAPABILITY_MANIFEST = createCapabilityManifest([
     defaultDecision: "BLOCK",
   },
   {
+    id: "host:display-inventory",
+    description: "Read bounded display/DPI inventory through a live scoped host session.",
+    defaultDecision: "BLOCK",
+  },
+  {
+    id: "host:screenshot",
+    description: "Capture a bounded screenshot from explicitly scoped display or region evidence.",
+    defaultDecision: "BLOCK",
+  },
+  {
+    id: "host:ui-snapshot",
+    description: "Capture bounded accessibility/DOM-derived desktop UI evidence from an explicit scope.",
+    defaultDecision: "BLOCK",
+  },
+  {
+    id: "host:wait-for",
+    description: "Poll a bounded exact-window UI condition locally under an explicit timeout budget.",
+    defaultDecision: "BLOCK",
+  },
+  {
     id: "workspace:snapshot",
     description: "Capture a bounded immutable workspace snapshot in external history storage.",
     defaultDecision: "BLOCK",

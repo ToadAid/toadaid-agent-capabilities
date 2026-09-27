@@ -32,6 +32,7 @@ Implemented lanes:
 - **P14 — governed capability module lifecycle:** bind module identity/version to exact P3 capability defaults, C1 descriptors, P12 adapter registrations, and owned-resource fingerprints; installation starts disabled, enablement never grants P3 authority, and update/remove refuse dirty owned state.
 - **P9B — governed reusable web-session hygiene:** keep pooling behind current P8 lease authority, reset and reapply exact per-request settings on every checkout, fingerprint effective policy, quarantine errored/poisoned pages, and keep anonymous one-shot work separate from persistent authenticated state.
 - **P15 — scoped host-connector session lease:** bind host/session/owner identity to a narrow maximum capability set and expiry while requiring fresh P3 `ALLOW` for every filesystem read/write, command execution, tool invocation, or connector/MCP use; narrowing never widens and persistent config remains provenance only.
+- **P16 — governed desktop observation:** split display inventory, scoped screenshot, rich UI snapshot, and bounded exact-window wait-for into separate read-only host contracts behind a live P15 lease, fresh P3/C1/H1 checks, Q1 reservation, observation epochs, and degraded-on-failure evidence.
 
 See [`BUILD_LIST.md`](./BUILD_LIST.md) for the canonical roadmap.
 
@@ -86,6 +87,8 @@ Capability-module lifecycle is availability state, not authority. P14 requires m
 Reusable browser state is an optimization, not permission. P9B rechecks P8 on checkout and before returning persistent state to the pool, forces reset-before-apply for every request, fingerprints the exact effective timeout/header/resource/network policy, refuses sensitive authentication headers, and quarantines any errored, poisoned, stale-authority, or stale-lease page instead of reusing it.
 
 Host attachment is identity, not machine authority. P15 separates `host:session` from filesystem read/write, command execution, tool invocation, and connector use; the lease is only a maximum scope, every active use rechecks current P3 authority plus the runtime-owned current lease head, stale predecessor leases are refused after narrowing/revocation, and saved connection configuration can prove provenance without granting access.
+
+Desktop observation is evidence, not interaction authority. P16 requires explicit display/region/window scope, a current P15 lease head, exact H1 arguments, current C1 implementation provenance, and Q1 reservation before adapter entry; exact-window observations publish a runtime-owned current observation head before adapter entry, old receipts cannot keep old element references alive after a newer/degraded epoch, adapter artifact kinds are request-bound, and failures produce `DEGRADED` evidence with no reusable element references.
 
 ## Graduation proof
 
