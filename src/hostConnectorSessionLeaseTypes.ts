@@ -16,7 +16,18 @@ export type HostConnectorActionCapabilityId =
   | "host:pointer-move"
   | "host:scroll"
   | "host:text-input"
-  | "host:shortcut";
+  | "host:shortcut"
+  | "host:app-launch"
+  | "host:clipboard-read"
+  | "host:clipboard-write"
+  | "host:process-read"
+  | "host:process-stop"
+  | "host:file-read"
+  | "host:file-write"
+  | "host:notification"
+  | "host:registry-read"
+  | "host:registry-write"
+  | "host:command-exec";
 
 export type HostConnectorSessionLeaseStatus =
   | "ACTIVE"

@@ -267,12 +267,12 @@ Checkbox law: mark an item complete only when the implementation is landed on ca
   - interaction receipts bind intent, target evidence SHA, action parameters hash, resulting observation reference when available, and bounded error provenance without persisting raw sensitive text
   - interaction state never widens filesystem, process, registry, command, network, economic, or provider authority
 
-- [ ] **P18 — Governed host service capabilities**
+- [x] **P18 — Governed host service capabilities**
   - expose host services as narrow contracts such as `host:app-launch`, `host:clipboard-read`, `host:clipboard-write`, `host:process-read`, `host:process-stop`, `host:file-read`, `host:file-write`, `host:notification`, `host:registry-read`, `host:registry-write`, and `host:command-exec`
   - read/write/destructive surfaces remain distinct even when the underlying OS adapter implements them in one module
   - filesystem capabilities require explicit bounded path scope with canonicalization, traversal/symlink escape refusal, and separate read vs mutation authority
-  - process-stop, registry-write, file-write, and command execution are mutation capabilities with X1 replay classification and reconciliation on uncertain outcomes
-  - `host:command-exec` accepts structured executable + argv + bounded cwd/env policy; no ambient shell-string authority or implicit elevation
+  - process-stop, registry-write, file-write, and command execution are mutation capabilities; P18 v1 requires `NON_REPLAYABLE` X1 classification and reconciliation on uncertain outcomes, while process-stop additionally requires fresh process-identity evidence enforced by the adapter contract
+  - `host:command-exec` accepts structured executable + argv + explicit bounded cwd + non-inherited env policy; no ambient shell-string authority, implicit elevation, UNC/device executable path, or ambient cwd/env inheritance
   - app launch/control, clipboard, process, registry, filesystem, command, and notification use each recheck the live P15 lease and current P3/C1/H1 authority
   - adapters run with least available host privilege and never convert the connected user's OS permissions into automatic agent permissions
   - P14 module lifecycle may install an OS-specific implementation, but installation/enabled state never authorizes any P18 service

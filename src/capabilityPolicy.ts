@@ -182,6 +182,61 @@ export const CORE_CAPABILITY_MANIFEST = createCapabilityManifest([
     defaultDecision: "BLOCK",
   },
   {
+    id: "host:app-launch",
+    description: "Launch an explicit host application executable with structured arguments under a scoped host lease.",
+    defaultDecision: "BLOCK",
+  },
+  {
+    id: "host:clipboard-read",
+    description: "Read bounded host clipboard text through a scoped host lease.",
+    defaultDecision: "BLOCK",
+  },
+  {
+    id: "host:clipboard-write",
+    description: "Write bounded ordinary host clipboard text through separately authorized mutation authority.",
+    defaultDecision: "BLOCK",
+  },
+  {
+    id: "host:process-read",
+    description: "Read bounded host process evidence through a scoped host lease.",
+    defaultDecision: "BLOCK",
+  },
+  {
+    id: "host:process-stop",
+    description: "Stop an exact process only from prior process evidence through separately authorized mutation authority.",
+    defaultDecision: "BLOCK",
+  },
+  {
+    id: "host:file-read",
+    description: "Read bounded host file content under an explicit canonical root/path scope.",
+    defaultDecision: "BLOCK",
+  },
+  {
+    id: "host:file-write",
+    description: "Write bounded host file content under an explicit canonical root/path scope and mutation authority.",
+    defaultDecision: "BLOCK",
+  },
+  {
+    id: "host:notification",
+    description: "Emit a bounded host notification through separately authorized mutation authority.",
+    defaultDecision: "BLOCK",
+  },
+  {
+    id: "host:registry-read",
+    description: "Read a bounded explicit host registry hive/root/key scope.",
+    defaultDecision: "BLOCK",
+  },
+  {
+    id: "host:registry-write",
+    description: "Mutate a bounded explicit host registry hive/root/key scope through separately authorized authority.",
+    defaultDecision: "BLOCK",
+  },
+  {
+    id: "host:command-exec",
+    description: "Execute an explicit absolute executable with structured argv/cwd/env and no implicit shell or elevation.",
+    defaultDecision: "BLOCK",
+  },
+  {
     id: "workspace:snapshot",
     description: "Capture a bounded immutable workspace snapshot in external history storage.",
     defaultDecision: "BLOCK",

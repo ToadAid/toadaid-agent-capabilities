@@ -40,6 +40,17 @@ export const HOST_CONNECTOR_ACTION_CAPABILITIES:
     "host:scroll",
     "host:text-input",
     "host:shortcut",
+    "host:app-launch",
+    "host:clipboard-read",
+    "host:clipboard-write",
+    "host:process-read",
+    "host:process-stop",
+    "host:file-read",
+    "host:file-write",
+    "host:notification",
+    "host:registry-read",
+    "host:registry-write",
+    "host:command-exec",
   ]);
 
 const HOST_ACTION_CAPABILITY_SET = new Set<string>(
