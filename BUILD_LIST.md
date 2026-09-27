@@ -278,6 +278,70 @@ Checkbox law: mark an item complete only when the implementation is landed on ca
   - P14 module lifecycle may install an OS-specific implementation, but installation/enabled state never authorizes any P18 service
   - host-service receipts remain bounded provenance/evidence; raw clipboard data, command output, secrets, and file contents stay outside authority state
 
+## Provider-runtime integration lane
+
+- [ ] **P14B — Typed provider module composition — NEXT CUT**
+  - generalize P14 manifests from connector-only registrations to a discriminated union of connector, desktop-observation, desktop-interaction, and host-service adapter registrations
+  - share exact adapter/capability/tool/contract/descriptor/implementation bindings while retaining adapter-kind-specific validation and typed P16/P17/P18 runtime interfaces
+  - compose enabled module projections into one runtime provider registry without treating enabled state as P3 authority
+  - distinguish known capability definitions from actually installed module capabilities
+  - refuse duplicate active capability/tool bindings unless the runtime supplies one explicit provider selection; legacy/structured host capability aliases must not create ambiguous dual bindings
+  - bind provider selection to module lifecycle record SHA, adapter registration SHA, contract descriptor SHA, and implementation fingerprint
+  - prove disabled, removed, stale, conflicting, or mismatched provider registrations cannot enter runtime dispatch
+  - add a clean package-consumer proof using a fixture specialized host provider through public exports
+
+- [ ] **C1B — Contract / implementation identity separation**
+  - keep semantic contract identity separate from provider implementation identity so Windows/Linux/multiple compatible providers may implement one contract without pretending the contract changed
+  - semantic descriptors bind capability ID, contract ID/version, feature set, and enforceable request/result/receipt schema fingerprints
+  - provider implementation descriptors bind module/provider ID, adapter kind/ID, supported contract/features, platform requirements, and implementation fingerprint
+  - invocation binding retains exact contract descriptor SHA + selected adapter registration SHA + implementation fingerprint; provider changes require explicit rebind
+  - schema IDs without enforceable digests must not be described as self-describing contract truth
+
+- [ ] **P19 — Provider selection + availability + health projection**
+  - separate `KNOWN`, `INSTALLED`, `ENABLED`, `AVAILABLE`, and `AUTHORIZED`; none may silently imply another
+  - health refines availability as `AVAILABLE_HEALTHY`, `AVAILABLE_DEGRADED`, or `UNAVAILABLE` and remains non-authority state
+  - compose the active P3 installed manifest from built-ins plus installed/enabled module projections instead of treating the full capability catalog as installed truth
+  - select one explicit compatible provider for the current host/session; fail closed on duplicate compatible providers until an explicit selection exists
+  - bind availability to live provider/module/host-session identity without granting action authority
+  - prove provider disappearance, degradation, restart, module disable/remove, or selection change invalidates stale runtime bindings
+
+- [ ] **P16B — Observation evidence semantics hardening**
+  - treat bounded wait timeout (`matched=false`) as a valid observation with explicit `completionReason: MATCHED | TIMED_OUT`, not malformed adapter output
+  - bind live element/window evidence to provider generation/evidence namespace so provider restart makes old live references provably stale
+  - exact-window observation emits authorized geometry with explicit coordinate space and display-topology evidence so P17 raw-coordinate targeting has a valid contract path
+  - distinguish `DESKTOP_PHYSICAL` from `WINDOW_CLIENT_PHYSICAL` coordinates rather than overloading raw x/y semantics
+  - bind numeric display selection to display-inventory/topology epoch rather than treating display indexes as durable monitor identity
+  - require `now + maxWallClockMs <= P15 lease.expiresAt` for wait operations; cancellation truth distinguishes requested, delivered, confirmed-quiescent, and uncertain
+
+- [ ] **P17B — Prepared desktop mutation dispatch**
+  - separate provider read-only preparation from the mutation boundary so target/evidence/focus/generation validation may refuse cleanly before dispatch without opening X1 reconciliation
+  - preparation ticket binds request/parameter hash, selected provider generation/fingerprint, exact resolved target identity, short expiry, and provider nonce
+  - claim mutation lifecycle/budget state at the actual dispatch boundary rather than merely on entry to provider code
+  - fix the currently unreachable raw-coordinate path by consuming P16B exact-window geometry + explicit coordinate-space evidence
+  - typed `REFUSED_BEFORE_DISPATCH` is a safe refusal; failure/transport loss after dispatch begins remains reconciliation-required
+  - no provider may silently retarget a changed window/element after preparation
+
+- [ ] **P18B — Host-service identity + containment contracts**
+  - bind `host:process-stop` to a governed `host:process-read` reference carrying receipt/evidence SHA, provider evidence namespace/processRef, and observation time
+  - add explicit registry view `REGISTRY_32 | REGISTRY_64`; never inherit worker architecture as authority semantics
+  - command/app executable authority binds exact executable identity/hash or trusted allowlisted identity plus capability-specific argv profile; absolute path alone is insufficient
+  - define child-process policy, process-count bounds, termination policy, and confirmed timeout quiescence for command execution
+  - define a narrow bounded runtime content resolver for `contentRef` / `valueRef` / `stdinRef` / environment references; adapters never receive ambient secret/content-store authority
+  - require long-running host operations to fit inside remaining P15 lease lifetime
+  - document/deprecate legacy `host:filesystem-read`, `host:filesystem-write`, and `host:command-execute` versus structured P18 names so both families cannot become an operator-policy trap
+
+- [ ] **H1/X1B — Reconciliation terminal closeout**
+  - consume exact resolved X1 reconciliation evidence into a terminal H1 transition instead of leaving reconciliation and invocation lifecycle separately mutable
+  - prevent H1 `COMPLETED`/`FAILED` outcomes that contradict open or resolved reconciliation truth
+  - terminal evidence binds the exact reconciliation SHA and disposition
+  - represent reconciled-executed, reconciled-not-executed, and outcome-unknown truth explicitly enough that the old invocation cannot be silently reused
+
+- [ ] **D2 — Capability-specific package surfaces**
+  - add package subpath exports for policy, invocation, contracts, modules, host-session, desktop-observation, desktop-interaction, host-services, and browser-runtime
+  - verify host/provider consumers can import authority/types without traversing or installing browser runtime implementation code such as Playwright
+  - keep one package initially; split packages only when independent release/install boundaries justify it
+  - add clean consumer proofs for each declared subpath and fail if browser-only dependencies leak into host-only surfaces
+
 ## Standing design rules
 
 - Capabilities are explicit; authority is not ambient.
