@@ -107,6 +107,36 @@ export const CORE_CAPABILITY_MANIFEST = createCapabilityManifest([
     defaultDecision: "BLOCK",
   },
   {
+    id: "host:session",
+    description: "Create, validate, narrow, use, and revoke an owner-bound host-connector session lease.",
+    defaultDecision: "BLOCK",
+  },
+  {
+    id: "host:filesystem-read",
+    description: "Read bounded host filesystem data through an explicitly scoped host-connector session.",
+    defaultDecision: "BLOCK",
+  },
+  {
+    id: "host:filesystem-write",
+    description: "Mutate bounded host filesystem data through an explicitly scoped host-connector session.",
+    defaultDecision: "BLOCK",
+  },
+  {
+    id: "host:command-execute",
+    description: "Execute bounded host commands through an explicitly scoped host-connector session.",
+    defaultDecision: "BLOCK",
+  },
+  {
+    id: "host:tool-invoke",
+    description: "Invoke bounded host tools through an explicitly scoped host-connector session.",
+    defaultDecision: "BLOCK",
+  },
+  {
+    id: "host:connector-use",
+    description: "Use an MCP/skill/connector transport through an explicitly scoped host-connector session.",
+    defaultDecision: "BLOCK",
+  },
+  {
     id: "workspace:snapshot",
     description: "Capture a bounded immutable workspace snapshot in external history storage.",
     defaultDecision: "BLOCK",

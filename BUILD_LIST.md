@@ -239,7 +239,7 @@ Checkbox law: mark an item complete only when the implementation is landed on ca
   - one-shot anonymous operations remain separate from persistent authenticated-session operations
   - reuse is an optimization only; it never grants browser, secret, or economic authority
 
-- [ ] **P15 — Scoped host-connector session lease**
+- [x] **P15 — Scoped host-connector session lease**
   - host connection identity is distinct from permission to read files, write files, execute commands, invoke tools, or use MCP/skills
   - lease binds exact host/session/owner plus an explicit narrow capability set and expiry
   - permissions may be narrowed or revoked without disconnecting unrelated host capabilities

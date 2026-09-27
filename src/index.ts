@@ -239,6 +239,35 @@ export type {
   ReusableBrowserSessionMode,
 } from "./browserSessionReuseTypes.js";
 export {
+  HOST_CONNECTOR_ACTION_CAPABILITIES,
+  assertHostConnectorSessionLeasePredecessor,
+  assertHostConnectorSessionLeaseUsable,
+  createHostConnectorSessionLease,
+  hostConnectorSessionLeaseSha256,
+  narrowHostConnectorSessionLease,
+  parseHostConnectorSessionLease,
+  revokeHostConnectorSessionLease,
+  sealHostConnectorSessionLease,
+  serializeHostConnectorSessionLease,
+  validateHostConnectorSessionLease,
+  validateHostConnectorSessionLeaseEnvelope,
+} from "./hostConnectorSessionLease.js";
+export type {
+  CreateHostConnectorSessionLeaseInput,
+  HostConnectorActionCapabilityId,
+  HostConnectorSessionAuthorityBundle,
+  HostConnectorSessionLease,
+  HostConnectorSessionLeaseEnvelope,
+  HostConnectorSessionLeaseStatus,
+  HostConnectorSessionLeaseTransition,
+  HostConnectorSessionRuntime,
+  HostConnectorSessionUseBinding,
+  HostConnectorSessionUseRequest,
+  HostConnectorSessionUseRuntime,
+  NarrowHostConnectorSessionLeaseInput,
+  RevokeHostConnectorSessionLeaseInput,
+} from "./hostConnectorSessionLeaseTypes.js";
+export {
   advanceCrawlCheckpoint,
   assertCrawlCheckpointBinding,
   assertCrawlCheckpointPredecessor,
