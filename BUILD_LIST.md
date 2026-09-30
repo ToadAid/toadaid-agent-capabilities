@@ -342,6 +342,69 @@ Checkbox law: mark an item complete only when the implementation is landed on ca
   - keep one package initially; split packages only when independent release/install boundaries justify it
   - add clean consumer proofs for each declared subpath and fail if browser-only dependencies leak into host-only surfaces
 
+## Security-audit specialist lane
+
+> Research source: `cloudflare/security-audit-skill`. Adopt the useful security-audit workflow as a governed ToadAid capability rather than granting an external skill ambient authority.
+
+- [ ] **SEC1 — Security audit evidence + threat-model contract**
+  - bind each audit to exact repository identity, source revision/tree SHA, declared scope, configuration/rule-set fingerprint, and run identity
+  - reconnaissance produces a bounded architecture/trust-boundary snapshot before hunting begins
+  - derive target-specific attack classes from the repository instead of assuming one generic checklist is complete
+  - canonical finding states are `CANDIDATE`, `CONFIRMED`, `NEEDS_VALIDATION`, and `REJECTED`; suspicion never silently becomes a vulnerability
+  - evidence references and source locations are immutable plain data; security findings never grant mutation authority
+
+- [ ] **SEC2 — Coverage ledger + attack-class planning**
+  - maintain a durable `(area × attack class)` coverage ledger with explicit unexplored/thin/covered states
+  - every hunter assignment binds exact scope, attack class, source revision, budget, and predecessor coverage state
+  - gap analysis selects thin or unexplored cells deterministically instead of repeatedly reviewing the same files
+  - repeated audits extend prior coverage while changed source invalidates only the affected evidence/coverage lineage
+  - coverage percentage is evidence of inspection breadth only; it never means the code is secure
+
+- [ ] **SEC3 — Isolated security Hunter children**
+  - spawn P5-bounded security-research children with read-only source access by default and Q1 model/tool/network/time budgets
+  - each Hunter receives one narrow attack class and repository slice rather than unrestricted whole-repo authority
+  - Hunters may emit candidates plus reproduction/proof plans but cannot confirm their own findings
+  - child outputs bind exact source/evidence SHA and preserve disagreements rather than collapsing them into one verdict
+  - no Hunter receives fix, Git push, merge, secret materialization, live economic, or unrelated host authority
+
+- [ ] **SEC4 — Adversarial validation + independent re-verification**
+  - candidate validation runs in a fresh child/context whose objective is to disprove the finding before confirming it
+  - the discovering Hunter and confirming validator must be distinct audit identities; self-confirmation is refused
+  - `NEEDS_VALIDATION` remains first-class whenever proof cannot safely or deterministically establish exploitability
+  - confirmed findings require bounded reproduction evidence plus exact source binding; rejected findings retain the disproof reason and evidence fingerprint
+  - optional final re-verifier independently checks confirmed source locations and proof claims before report publication
+  - provider/model diversity may be recorded as provenance but never treated as proof by itself
+
+- [ ] **SEC5 — Governed security execution sandbox**
+  - active proof execution requires a dedicated sandbox capability separate from ordinary repository read/review authority
+  - default network is disabled; environment is sanitized; writable paths are scratch-only; CPU/memory/process/wall-clock limits are explicit and Q1-accounted
+  - target build/test/probe commands use structured executable + argv + bounded cwd with no ambient shell-string, inherited secrets, or host-home authority
+  - proof artifacts leave the sandbox only through bounded content-addressed evidence references
+  - if required sandbox guarantees are unavailable, execution is refused or the finding stays `NEEDS_VALIDATION` rather than pretending it was confirmed
+  - timeout/crash/unknown execution outcomes never trigger blind replay of side-effecting proof steps
+
+- [ ] **SEC6 — Durable resumable audit state + source-change invalidation**
+  - persist reconnaissance, attack-class plan, coverage ledger, candidate/validation states, evidence references, and child-task lineage through P4/P5
+  - resume requires the exact repository/source/config identity expected by the audit; source drift produces explicit stale/invalidated evidence rather than silent reuse
+  - completed validated findings remain immutable historical evidence while changed affected regions re-enter the coverage queue
+  - budget exhaustion, interrupted children, and provider changes resume through explicit state transitions with no duplicate uncontrolled hunting
+  - audit state is non-authority data and cannot restore revoked repository, sandbox, network, or host capabilities
+
+- [ ] **SEC7 — Canonical findings + verified report generation**
+  - canonical machine-readable `findings.json` is schema-validated before any human-facing report is generated
+  - findings carry severity/risk fields, source locations, attack class, proof status, evidence references, affected revision, and validator provenance without embedding secrets
+  - generate `REPORT.md`, detailed finding views, coverage summary, and `NEEDS_VALIDATION` queue mechanically from canonical audit state
+  - report generation must not upgrade candidate state, alter proof truth, or hide rejected/uncertain evidence
+  - provide deterministic diff/report comparison between audit revisions so newly introduced, fixed, regressed, and still-open findings are distinguishable
+
+- [ ] **SEC8 — Agent0 security specialist + separately governed repair handoff**
+  - expose the audit workflow as an Agent0/ToadGang security specialist using W1 recipes and the shared P3/C1/H1/Q1/P5 spine
+  - support repository preflight, targeted audit, gap-fill audit, validation-only, and re-verification modes as explicit bounded recipes
+  - security inspection authority is separate from `review:fix`, file mutation, Git commit/push, PR, and merge authority
+  - confirmed findings may produce a bounded repair proposal or handoff package, but a finder/validator cannot merge its own fix
+  - repairs should snapshot source before mutation and bind the post-fix diff/test evidence back to the originating confirmed finding
+  - package/adapter integration remains provider-neutral so Codex, Claude-like harnesses, local models, or future workers can consume the same governed security capability
+
 ## Standing design rules
 
 - Capabilities are explicit; authority is not ambient.
@@ -351,6 +414,7 @@ Checkbox law: mark an item complete only when the implementation is landed on ca
 - Workspace history is external to project Git and restore requires separate authority.
 - Loop breakers may halt without authority; repair may fix syntax only and never invent semantics or authority.
 - Review inspection never implies review fixes; external review engines are deterministic evidence providers, not sovereign runtimes.
+- Security discovery, validation, and reporting never imply fix, Git, merge, sandbox, secret, network, host, or economic authority; the finder cannot confirm or merge its own work.
 - Browser session leases are owner/origin/expiry scoped; saved or persistent state never grants browser action authority.
 - Adaptive web evidence remains evidence; crawl/XHR/stealth authority is explicit and never implies mutation or economic authority.
 - Human interrupt responses are typed data, not approvals or authority; resume is bound to the exact paused run state.
