@@ -32,12 +32,15 @@ import type {
   DesktopObservationArtifactReference,
   DesktopObservationCapabilityId,
   DesktopObservationElementEvidence,
+  DesktopObservationGeometryEvidence,
   DesktopObservationHead,
   DesktopObservationHeadRuntime,
   DesktopObservationKind,
   DesktopObservationReceipt,
   DesktopObservationRegion,
   DesktopObservationRequest,
+  DesktopObservationProviderIdentity,
+  DesktopObservationCancellationStatus,
   DesktopObservedElementReference,
   DesktopWaitForCondition,
   GovernedDesktopObservationAdapter,
@@ -246,6 +249,7 @@ function normalizeScope(
   request: DesktopObservationRequest,
 ): {
   readonly displayIds: readonly number[];
+  readonly displayTopologyEpoch: string | null;
   readonly region: DesktopObservationRegion | null;
 } {
   const scope =
@@ -254,13 +258,19 @@ function normalizeScope(
       ? request.scope
       : undefined;
   const displayIds = normalizeDisplayIds(scope?.displayIds);
+  const displayTopologyEpoch = scope?.displayTopologyEpoch === undefined
+    ? null
+    : boundedId(scope.displayTopologyEpoch, "displayTopologyEpoch");
   const region = normalizeRegion(scope?.region);
   if (displayIds.length > 0 && region !== null) {
     throw new Error(
       "desktop observation scope must choose displayIds or region, not both",
     );
   }
-  return { displayIds, region };
+  if ((displayIds.length > 0) !== (displayTopologyEpoch !== null)) {
+    throw new Error("numeric display selection requires exact displayTopologyEpoch");
+  }
+  return { displayIds, displayTopologyEpoch, region };
 }
 
 function normalizeWaitCondition(
@@ -292,7 +302,7 @@ export function normalizeDesktopObservationRequest(
   const ownerId = boundedId(request.ownerId, "ownerId");
   const capabilityId = capabilityForKind(request.kind);
   const tool = DESKTOP_OBSERVATION_TOOL_NAMES[capabilityId];
-  const { displayIds, region } = normalizeScope(request);
+  const { displayIds, displayTopologyEpoch, region } = normalizeScope(request);
 
   if (request.kind === "DISPLAY_INVENTORY") {
     return Object.freeze({
@@ -303,6 +313,7 @@ export function normalizeDesktopObservationRequest(
       sessionId,
       ownerId,
       displayIds: Object.freeze([]),
+      displayTopologyEpoch: null,
       region: null,
       windowId: null,
       annotate: false,
@@ -336,6 +347,7 @@ export function normalizeDesktopObservationRequest(
       sessionId,
       ownerId,
       displayIds,
+      displayTopologyEpoch,
       region,
       windowId: null,
       annotate: booleanValue(
@@ -381,6 +393,7 @@ export function normalizeDesktopObservationRequest(
       sessionId,
       ownerId,
       displayIds,
+      displayTopologyEpoch,
       region,
       windowId,
       annotate: false,
@@ -469,6 +482,7 @@ export function normalizeDesktopObservationRequest(
     sessionId,
     ownerId,
     displayIds: Object.freeze([]),
+    displayTopologyEpoch: null,
     region: null,
     windowId,
     annotate: false,
@@ -826,6 +840,32 @@ function normalizeElementEvidence(
   return Object.freeze(normalized);
 }
 
+function normalizeProviderIdentity(
+  value: DesktopObservationProviderIdentity,
+): DesktopObservationProviderIdentity {
+  return Object.freeze({
+    providerDescriptorSha256: sha(value.providerDescriptorSha256, "providerIdentity.providerDescriptorSha256")!,
+    providerGenerationSha256: sha(value.providerGenerationSha256, "providerIdentity.providerGenerationSha256")!,
+    evidenceNamespace: boundedId(value.evidenceNamespace, "providerIdentity.evidenceNamespace"),
+  });
+}
+
+function normalizeGeometry(
+  value: DesktopObservationGeometryEvidence | undefined,
+): DesktopObservationGeometryEvidence | null {
+  if (value === undefined) return null;
+  const coordinateSpace = value.coordinateSpace;
+  if (coordinateSpace !== "DESKTOP_PHYSICAL" && coordinateSpace !== "WINDOW_CLIENT_PHYSICAL") {
+    throw new TypeError("desktop observation geometry coordinateSpace is invalid");
+  }
+  const bounds = normalizeRegion(value.bounds) ?? (() => { throw new TypeError("desktop observation geometry bounds are required"); })();
+  return Object.freeze({
+    coordinateSpace,
+    bounds,
+    displayTopologyEpoch: boundedId(value.displayTopologyEpoch, "geometry.displayTopologyEpoch"),
+  });
+}
+
 function normalizeAdapterResult(
   value: DesktopObservationAdapterResult,
   request: DesktopObservationAdapterRequest,
@@ -860,6 +900,12 @@ function normalizeAdapterResult(
   const displayIds = normalizeDisplayIds(
     raw.displayIds as readonly number[],
   );
+  const displayTopologyEpoch = raw.displayTopologyEpoch === undefined
+    ? null
+    : boundedId(raw.displayTopologyEpoch as string, "displayTopologyEpoch");
+  if (request.parameters.displayTopologyEpoch !== null && displayTopologyEpoch !== request.parameters.displayTopologyEpoch) {
+    throw new Error("desktop observation adapter display topology identity mismatch");
+  }
   const windowId =
     raw.windowId === null
       ? null
@@ -896,6 +942,10 @@ function normalizeAdapterResult(
       | undefined,
     request.parameters.maxElements,
   );
+  const geometry = normalizeGeometry(raw.geometry as DesktopObservationGeometryEvidence | undefined);
+  if (geometry !== null && displayTopologyEpoch !== null && geometry.displayTopologyEpoch !== displayTopologyEpoch) {
+    throw new Error("desktop observation geometry topology mismatch");
+  }
 
   const artifactKinds = new Set(
     artifacts.map((artifact) => artifact.kind),
@@ -915,6 +965,7 @@ function normalizeAdapterResult(
         "desktop observation adapter result artifact kind mismatch for display inventory",
       );
     }
+    if (displayTopologyEpoch === null) throw new Error("display inventory must report displayTopologyEpoch");
   } else if (request.parameters.kind === "SCREENSHOT") {
     if (
       artifactKinds.size !== 1 ||
@@ -971,6 +1022,9 @@ function normalizeAdapterResult(
         "desktop observation adapter result cannot issue reusable element evidence without explicit windowId",
       );
     }
+    if (request.parameters.windowId !== null && geometry === null) {
+      throw new Error("exact-window UI snapshot requires explicit coordinate-space geometry");
+    }
   } else {
     if (
       artifactKinds.size !== 1 ||
@@ -980,12 +1034,14 @@ function normalizeAdapterResult(
         "desktop observation adapter result artifact kind mismatch for wait-for",
       );
     }
-    if (raw.matched !== true) {
-      throw new Error(
-        "desktop wait-for adapter result must report matched=true",
-      );
-    }
+    if (typeof raw.matched !== "boolean") throw new TypeError("desktop wait-for adapter result matched must be boolean");
+    const expectedCompletion = raw.matched ? "MATCHED" : "TIMED_OUT";
+    if (raw.completionReason !== expectedCompletion) throw new Error("desktop wait-for completionReason does not match result");
   }
+
+  const cancellationStatuses: readonly DesktopObservationCancellationStatus[] = ["NOT_REQUESTED", "REQUESTED", "DELIVERED", "CONFIRMED_QUIESCENT", "UNCERTAIN"];
+  const cancellationStatus = raw.cancellationStatus === undefined ? "NOT_REQUESTED" : raw.cancellationStatus as DesktopObservationCancellationStatus;
+  if (!cancellationStatuses.includes(cancellationStatus)) throw new TypeError("desktop observation cancellationStatus is invalid");
 
   if (
     request.parameters.kind !== "UI_SNAPSHOT" &&
@@ -998,19 +1054,27 @@ function normalizeAdapterResult(
 
   const matched =
     request.parameters.kind === "WAIT_FOR"
-      ? true
+      ? raw.matched as boolean
       : null;
+  const completionReason = request.parameters.kind === "WAIT_FOR"
+    ? raw.completionReason as "MATCHED" | "TIMED_OUT"
+    : null;
   const evidenceSha256 = sha256({
     adapterEvidenceSha256,
     parametersSha256: request.parametersSha256,
     observationEpoch: request.observationEpoch,
     hostId: request.hostId,
     sessionId: request.sessionId,
+    provider: request.provider,
     displayIds,
+    displayTopologyEpoch,
     windowId,
+    geometry,
     artifacts,
     elements,
     matched,
+    completionReason,
+    cancellationStatus,
   });
 
   return Object.freeze({
@@ -1023,12 +1087,15 @@ function normalizeAdapterResult(
     windowId,
     evidenceSha256,
     artifacts,
+    ...(displayTopologyEpoch === null ? {} : { displayTopologyEpoch }),
+    ...(geometry === null ? {} : { geometry }),
+    cancellationStatus,
     ...(elements.length > 0
       ? { elements }
       : {}),
-    ...(request.parameters.kind === "WAIT_FOR"
-      ? { matched: true }
-      : {}),
+    ...(matched === null
+      ? {}
+      : { matched, completionReason: completionReason! }),
   });
 }
 
@@ -1057,6 +1124,12 @@ function observedElementRefs(
           request.observationEpoch,
         observationEvidenceSha256:
           result.evidenceSha256,
+        providerDescriptorSha256:
+          request.provider.providerDescriptorSha256,
+        providerGenerationSha256:
+          request.provider.providerGenerationSha256,
+        evidenceNamespace:
+          request.provider.evidenceNamespace,
         elementEvidenceSha256:
           element.evidenceSha256,
         inputSecurity: element.inputSecurity,
@@ -1102,6 +1175,7 @@ function observationHead(
     "hostId" | "sessionId" | "windowId"
   >,
   observationEpoch: string,
+  provider: DesktopObservationProviderIdentity,
   evidenceSha256: string | null,
   receiptSha256: string | null,
 ): DesktopObservationHead {
@@ -1117,6 +1191,9 @@ function observationHead(
     sessionId: request.sessionId,
     windowId: request.windowId,
     observationEpoch,
+    providerDescriptorSha256: provider.providerDescriptorSha256,
+    providerGenerationSha256: provider.providerGenerationSha256,
+    evidenceNamespace: provider.evidenceNamespace,
     status,
     evidenceSha256,
     receiptSha256,
@@ -1134,6 +1211,9 @@ function sameObservationHead(
     left.sessionId === right.sessionId &&
     left.windowId === right.windowId &&
     left.observationEpoch === right.observationEpoch &&
+    left.providerDescriptorSha256 === right.providerDescriptorSha256 &&
+    left.providerGenerationSha256 === right.providerGenerationSha256 &&
+    left.evidenceNamespace === right.evidenceNamespace &&
     left.status === right.status &&
     left.evidenceSha256 === right.evidenceSha256 &&
     left.receiptSha256 === right.receiptSha256
@@ -1145,6 +1225,7 @@ function publishObservationHead(
   status: DesktopObservationHead["status"],
   request: NormalizedDesktopObservationRequest,
   observationEpoch: string,
+  provider: DesktopObservationProviderIdentity,
   evidenceSha256: string | null,
   receiptSha256: string | null,
 ): void {
@@ -1154,6 +1235,7 @@ function publishObservationHead(
     status,
     request,
     observationEpoch,
+    provider,
     evidenceSha256,
     receiptSha256,
   );
@@ -1178,6 +1260,7 @@ function publishObservationHead(
     "PENDING",
     request,
     observationEpoch,
+    provider,
     null,
     null,
   );
@@ -1221,6 +1304,18 @@ export function assertDesktopElementReferenceCurrent(
       "desktop observation is not current usable element evidence",
     );
   }
+  const currentProvider = runtime.resolveCurrentProviderIdentity({
+    hostId: receipt.hostId,
+    sessionId: receipt.sessionId,
+  });
+  if (
+    currentProvider === null ||
+    currentProvider.providerDescriptorSha256 !== receipt.providerDescriptorSha256 ||
+    currentProvider.providerGenerationSha256 !== receipt.providerGenerationSha256 ||
+    currentProvider.evidenceNamespace !== receipt.evidenceNamespace
+  ) {
+    throw new Error("desktop observation provider generation or evidence namespace is stale");
+  }
 
   const current =
     runtime.resolveCurrentObservationHead({
@@ -1238,6 +1333,9 @@ export function assertDesktopElementReferenceCurrent(
     current.status !== "OK" ||
     current.observationEpoch !==
       receipt.observationEpoch ||
+    current.providerDescriptorSha256 !== receipt.providerDescriptorSha256 ||
+    current.providerGenerationSha256 !== receipt.providerGenerationSha256 ||
+    current.evidenceNamespace !== receipt.evidenceNamespace ||
     current.evidenceSha256 !==
       receipt.evidenceSha256 ||
     current.receiptSha256 !==
@@ -1256,6 +1354,9 @@ export function assertDesktopElementReferenceCurrent(
     reference.windowId !== receipt.windowId ||
     reference.observationEpoch !==
       receipt.observationEpoch ||
+    reference.providerDescriptorSha256 !== receipt.providerDescriptorSha256 ||
+    reference.providerGenerationSha256 !== receipt.providerGenerationSha256 ||
+    reference.evidenceNamespace !== receipt.evidenceNamespace ||
     reference.observationEvidenceSha256 !==
       receipt.evidenceSha256
   ) {
@@ -1290,6 +1391,7 @@ export async function observeGovernedDesktop(
   const registration = normalizeDesktopObservationAdapterRegistration(
     adapter.registration,
   );
+  const providerIdentity = normalizeProviderIdentity(input.providerIdentity);
 
   const leaseBinding =
     assertHostConnectorSessionLeaseUsable(
@@ -1313,6 +1415,16 @@ export async function observeGovernedDesktop(
       normalized,
       registration,
     );
+  if (providerIdentity.providerDescriptorSha256 !== binding.providerDescriptorSha256) {
+    throw new Error("desktop observation provider identity does not match C1 binding");
+  }
+  const currentProvider = input.observationHeadRuntime.resolveCurrentProviderIdentity({
+    hostId: normalized.hostId,
+    sessionId: normalized.sessionId,
+  });
+  if (currentProvider === null || sha256(normalizeProviderIdentity(currentProvider)) !== sha256(providerIdentity)) {
+    throw new Error("desktop observation provider generation or evidence namespace is stale");
+  }
 
   const budgetBefore =
     validateRunBudgetLedgerEnvelope(input.budget);
@@ -1345,6 +1457,9 @@ export async function observeGovernedDesktop(
     "observedAt",
     runtime.now ?? (() => new Date()),
   );
+  if (normalized.kind === "WAIT_FOR" && Date.parse(observedAt) + normalized.maxWallClockMs > Date.parse(leaseBinding.expiresAt)) {
+    throw new Error("desktop wait-for cannot complete within remaining host connector lease lifetime");
+  }
 
   const budgetAfter = recordRunBudgetUsage(
     budgetBefore,
@@ -1382,6 +1497,7 @@ export async function observeGovernedDesktop(
       capabilityId: normalized.capabilityId,
       toolName: normalized.toolName,
       observationEpoch,
+      provider: providerIdentity,
       parametersSha256,
       maxWallClockMs: normalized.maxWallClockMs,
       parameters: normalized,
@@ -1397,6 +1513,7 @@ export async function observeGovernedDesktop(
     "PENDING",
     normalized,
     observationEpoch,
+    providerIdentity,
     null,
     null,
   );
@@ -1429,7 +1546,15 @@ export async function observeGovernedDesktop(
       parametersSha256,
       observedAt,
       displayIds: result.displayIds,
+      displayTopologyEpoch: result.displayTopologyEpoch ?? result.geometry?.displayTopologyEpoch ?? null,
       windowId: result.windowId,
+      providerDescriptorSha256: providerIdentity.providerDescriptorSha256,
+      providerGenerationSha256: providerIdentity.providerGenerationSha256,
+      evidenceNamespace: providerIdentity.evidenceNamespace,
+      geometry: result.geometry ?? null,
+      matched: result.matched ?? null,
+      completionReason: result.completionReason ?? null,
+      cancellationStatus: result.cancellationStatus ?? "NOT_REQUESTED",
       evidenceSha256: result.evidenceSha256,
       artifacts: result.artifacts,
       elements,
@@ -1453,6 +1578,7 @@ export async function observeGovernedDesktop(
       "OK",
       normalized,
       observationEpoch,
+      providerIdentity,
       result.evidenceSha256,
       receipt.receiptSha256,
     );
@@ -1467,7 +1593,7 @@ export async function observeGovernedDesktop(
       error instanceof RangeError ||
       (
         error instanceof Error &&
-        /adapter result|identity mismatch|window identity|display identity|must report matched/.test(
+        /adapter result|identity mismatch|window identity|display identity|completionReason|geometry|topology/.test(
           error.message,
         )
       )
@@ -1492,7 +1618,15 @@ export async function observeGovernedDesktop(
       parametersSha256,
       observedAt,
       displayIds: normalized.displayIds,
+      displayTopologyEpoch: normalized.displayTopologyEpoch,
       windowId: normalized.windowId,
+      providerDescriptorSha256: providerIdentity.providerDescriptorSha256,
+      providerGenerationSha256: providerIdentity.providerGenerationSha256,
+      evidenceNamespace: providerIdentity.evidenceNamespace,
+      geometry: null,
+      matched: null,
+      completionReason: null,
+      cancellationStatus: "NOT_REQUESTED" as const,
       evidenceSha256: null,
       artifacts: Object.freeze([]),
       elements: Object.freeze([]),
@@ -1517,6 +1651,7 @@ export async function observeGovernedDesktop(
         "DEGRADED",
         normalized,
         observationEpoch,
+        providerIdentity,
         null,
         receipt.receiptSha256,
       );

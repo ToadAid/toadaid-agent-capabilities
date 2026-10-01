@@ -286,6 +286,11 @@ function normalizeElementTarget(
           element.observationEvidenceSha256 as string,
           "target.element.observationEvidenceSha256",
         )!,
+      providerDescriptorSha256:
+        sha(element.providerDescriptorSha256 as string, "target.element.providerDescriptorSha256")!,
+      providerGenerationSha256:
+        sha(element.providerGenerationSha256 as string, "target.element.providerGenerationSha256")!,
+      evidenceNamespace: boundedId(element.evidenceNamespace as string, "target.element.evidenceNamespace"),
       elementEvidenceSha256:
         sha(
           element.elementEvidenceSha256 as string,
@@ -326,9 +331,21 @@ function normalizeCoordinateTarget(
           31,
           "target.displayId",
         );
+  const displayTopologyEpoch = raw.displayTopologyEpoch === undefined
+    ? null
+    : boundedId(raw.displayTopologyEpoch as string, "target.displayTopologyEpoch");
+  if ((displayId !== null) !== (displayTopologyEpoch !== null)) {
+    throw new Error("coordinate displayId requires exact displayTopologyEpoch");
+  }
+  const coordinateSpace = raw.coordinateSpace;
+  if (coordinateSpace !== "DESKTOP_PHYSICAL" && coordinateSpace !== "WINDOW_CLIENT_PHYSICAL") {
+    throw new TypeError("target.coordinateSpace is invalid");
+  }
   return Object.freeze({
     kind: "COORDINATE",
     displayId,
+    displayTopologyEpoch,
+    coordinateSpace,
     x: boundedInteger(
       raw.x as number,
       -MAX_COORDINATE,
@@ -855,6 +872,18 @@ function assertCurrentObservationHead(
       "desktop interaction requires successful exact-window P16 evidence",
     );
   }
+  const currentProvider = runtime.resolveCurrentProviderIdentity({
+    hostId: receipt.hostId,
+    sessionId: receipt.sessionId,
+  });
+  if (
+    currentProvider === null ||
+    currentProvider.providerDescriptorSha256 !== receipt.providerDescriptorSha256 ||
+    currentProvider.providerGenerationSha256 !== receipt.providerGenerationSha256 ||
+    currentProvider.evidenceNamespace !== receipt.evidenceNamespace
+  ) {
+    throw new Error("desktop interaction observation provider generation is stale");
+  }
   const current =
     runtime.resolveCurrentObservationHead({
       hostId: receipt.hostId,
@@ -871,6 +900,9 @@ function assertCurrentObservationHead(
     current.windowId !== receipt.windowId ||
     current.observationEpoch !==
       receipt.observationEpoch ||
+    current.providerDescriptorSha256 !== receipt.providerDescriptorSha256 ||
+    current.providerGenerationSha256 !== receipt.providerGenerationSha256 ||
+    current.evidenceNamespace !== receipt.evidenceNamespace ||
     current.evidenceSha256 !==
       receipt.evidenceSha256 ||
     current.receiptSha256 !==
@@ -977,39 +1009,30 @@ function targetEvidenceSha256(
 
   if (normalized.target?.kind === "COORDINATE") {
     const target = normalized.target;
-    if (observation.region !== null) {
-      if (target.displayId !== null) {
-        throw new Error(
-          "region-scoped coordinate target cannot also select displayId",
-        );
+    const geometry = receipt.geometry;
+    if (geometry === null) throw new Error("desktop coordinate target requires exact P16 geometry evidence");
+    if (target.coordinateSpace !== geometry.coordinateSpace) throw new Error("desktop coordinate target coordinate space mismatch");
+    if (target.displayId !== null) {
+      if (target.coordinateSpace !== "DESKTOP_PHYSICAL" ||
+          !receipt.displayIds.includes(target.displayId) ||
+          target.displayTopologyEpoch !== receipt.displayTopologyEpoch ||
+          target.displayTopologyEpoch !== geometry.displayTopologyEpoch) {
+        throw new Error("desktop coordinate display target is stale or not authorized by P16 topology evidence");
       }
-      if (
-        target.x < observation.region.left ||
-        target.x >= observation.region.right ||
-        target.y < observation.region.top ||
-        target.y >= observation.region.bottom
-      ) {
-        throw new Error(
-          "desktop coordinate target is outside authorized P16 region",
-        );
-      }
-    } else if (observation.displayIds.length > 0) {
-      throw new Error(
-        "desktop coordinate target requires explicit bounded P16 region until display geometry is proven",
-      );
-    } else {
-      throw new Error(
-        "coordinate interaction requires P16 region or display scope",
-      );
     }
+    if (
+      target.x < geometry.bounds.left ||
+      target.x >= geometry.bounds.right ||
+      target.y < geometry.bounds.top ||
+      target.y >= geometry.bounds.bottom
+    ) throw new Error("desktop coordinate target is outside authorized P16 geometry");
     return sha256({
       receiptSha256: receipt.receiptSha256,
       evidenceSha256: receipt.evidenceSha256,
       target,
-      observationScope: {
-        displayIds: observation.displayIds,
-        region: observation.region,
-      },
+      geometry,
+      displayIds: receipt.displayIds,
+      displayTopologyEpoch: receipt.displayTopologyEpoch,
     });
   }
 
@@ -1072,6 +1095,9 @@ function claimInteractionPending(
     sessionId: receipt.sessionId,
     windowId: receipt.windowId!,
     observationEpoch: receipt.observationEpoch,
+    providerDescriptorSha256: receipt.providerDescriptorSha256,
+    providerGenerationSha256: receipt.providerGenerationSha256,
+    evidenceNamespace: receipt.evidenceNamespace,
     status: "OK" as const,
     evidenceSha256: receipt.evidenceSha256!,
     receiptSha256: receipt.receiptSha256,
@@ -1083,6 +1109,9 @@ function claimInteractionPending(
     sessionId: receipt.sessionId,
     windowId: receipt.windowId!,
     observationEpoch: interactionEpoch,
+    providerDescriptorSha256: receipt.providerDescriptorSha256,
+    providerGenerationSha256: receipt.providerGenerationSha256,
+    evidenceNamespace: receipt.evidenceNamespace,
     status: "PENDING" as const,
     evidenceSha256: null,
     receiptSha256: null,
@@ -1113,6 +1142,9 @@ function claimInteractionPending(
     current.windowId !== pending.windowId ||
     current.observationEpoch !==
       pending.observationEpoch ||
+    current.providerDescriptorSha256 !== pending.providerDescriptorSha256 ||
+    current.providerGenerationSha256 !== pending.providerGenerationSha256 ||
+    current.evidenceNamespace !== pending.evidenceNamespace ||
     current.status !== "PENDING" ||
     current.evidenceSha256 !== null ||
     current.receiptSha256 !== null
@@ -1157,6 +1189,7 @@ function normalizeResultingObservation(
       sessionId,
       windowId,
     });
+  const currentProvider = runtime.resolveCurrentProviderIdentity({ hostId, sessionId });
   if (
     current === null ||
     current.schemaVersion !==
@@ -1165,6 +1198,10 @@ function normalizeResultingObservation(
     current.hostId !== hostId ||
     current.sessionId !== sessionId ||
     current.windowId !== windowId ||
+    currentProvider === null ||
+    current.providerDescriptorSha256 !== currentProvider.providerDescriptorSha256 ||
+    current.providerGenerationSha256 !== currentProvider.providerGenerationSha256 ||
+    current.evidenceNamespace !== currentProvider.evidenceNamespace ||
     current.observationEpoch !==
       normalized.observationEpoch ||
     current.evidenceSha256 !==

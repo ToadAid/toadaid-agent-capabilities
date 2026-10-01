@@ -47,8 +47,34 @@ export interface DesktopObservationRegion {
 
 export interface DesktopObservationScope {
   readonly displayIds?: readonly number[];
+  readonly displayTopologyEpoch?: string;
   readonly region?: DesktopObservationRegion;
 }
+
+export type DesktopCoordinateSpace =
+  | "DESKTOP_PHYSICAL"
+  | "WINDOW_CLIENT_PHYSICAL";
+
+export interface DesktopObservationGeometryEvidence {
+  readonly coordinateSpace: DesktopCoordinateSpace;
+  readonly bounds: DesktopObservationRegion;
+  readonly displayTopologyEpoch: string;
+}
+
+export interface DesktopObservationProviderIdentity {
+  readonly providerDescriptorSha256: string;
+  readonly providerGenerationSha256: string;
+  readonly evidenceNamespace: string;
+}
+
+export type DesktopWaitCompletionReason = "MATCHED" | "TIMED_OUT";
+
+export type DesktopObservationCancellationStatus =
+  | "NOT_REQUESTED"
+  | "REQUESTED"
+  | "DELIVERED"
+  | "CONFIRMED_QUIESCENT"
+  | "UNCERTAIN";
 
 export interface DesktopDisplayInventoryRequest {
   readonly kind: "DISPLAY_INVENTORY";
@@ -108,6 +134,7 @@ export interface NormalizedDesktopObservationRequest {
   readonly sessionId: string;
   readonly ownerId: string;
   readonly displayIds: readonly number[];
+  readonly displayTopologyEpoch: string | null;
   readonly region: DesktopObservationRegion | null;
   readonly windowId: string | null;
   readonly annotate: boolean;
@@ -152,6 +179,9 @@ export interface DesktopObservedElementReference {
   readonly windowId: string;
   readonly observationEpoch: string;
   readonly observationEvidenceSha256: string;
+  readonly providerDescriptorSha256: string;
+  readonly providerGenerationSha256: string;
+  readonly evidenceNamespace: string;
   readonly elementEvidenceSha256: string;
   readonly inputSecurity:
     | "ORDINARY_TEXT"
@@ -181,6 +211,7 @@ export interface DesktopObservationAdapterRequest {
   readonly capabilityId: DesktopObservationCapabilityId;
   readonly toolName: string;
   readonly observationEpoch: string;
+  readonly provider: DesktopObservationProviderIdentity;
   readonly parametersSha256: string;
   readonly maxWallClockMs: number;
   readonly parameters: NormalizedDesktopObservationRequest;
@@ -198,6 +229,10 @@ export interface DesktopObservationAdapterResult {
   readonly artifacts: readonly DesktopObservationArtifactReference[];
   readonly elements?: readonly DesktopObservationElementEvidence[];
   readonly matched?: boolean;
+  readonly completionReason?: DesktopWaitCompletionReason;
+  readonly cancellationStatus?: DesktopObservationCancellationStatus;
+  readonly displayTopologyEpoch?: string;
+  readonly geometry?: DesktopObservationGeometryEvidence;
 }
 
 export interface GovernedDesktopObservationAdapter {
@@ -219,12 +254,18 @@ export interface DesktopObservationHead {
   readonly sessionId: string;
   readonly windowId: string;
   readonly observationEpoch: string;
+  readonly providerDescriptorSha256: string;
+  readonly providerGenerationSha256: string;
+  readonly evidenceNamespace: string;
   readonly status: DesktopObservationHeadStatus;
   readonly evidenceSha256: string | null;
   readonly receiptSha256: string | null;
 }
 
 export interface DesktopObservationHeadRuntime {
+  resolveCurrentProviderIdentity(
+    identity: Readonly<{ hostId: string; sessionId: string }>,
+  ): DesktopObservationProviderIdentity | null;
   publishCurrentObservationHead(
     head: DesktopObservationHead,
   ): void;
@@ -258,6 +299,7 @@ export interface GovernedDesktopObservationInput {
   readonly contractRequirement: CapabilityContractRequirement;
   readonly contractRegistry: CapabilityContractRegistry;
   readonly budget: RunBudgetLedgerEnvelope;
+  readonly providerIdentity: DesktopObservationProviderIdentity;
   readonly request: DesktopObservationRequest;
 }
 
@@ -293,7 +335,15 @@ export interface DesktopObservationReceipt {
   readonly parametersSha256: string;
   readonly observedAt: string;
   readonly displayIds: readonly number[];
+  readonly displayTopologyEpoch: string | null;
   readonly windowId: string | null;
+  readonly providerDescriptorSha256: string;
+  readonly providerGenerationSha256: string;
+  readonly evidenceNamespace: string;
+  readonly geometry: DesktopObservationGeometryEvidence | null;
+  readonly matched: boolean | null;
+  readonly completionReason: DesktopWaitCompletionReason | null;
+  readonly cancellationStatus: DesktopObservationCancellationStatus;
   readonly evidenceSha256: string | null;
   readonly artifacts:
     readonly DesktopObservationArtifactReference[];

@@ -66,6 +66,9 @@ import type {
 const NOW = "2026-09-27T03:10:00.000Z";
 const IMPL_SHA = "a".repeat(64);
 const INTENT_SHA = "b".repeat(64);
+const PROVIDER_DESCRIPTOR_SHA = "c".repeat(64);
+const PROVIDER_GENERATION_SHA = "d".repeat(64);
+const EVIDENCE_NAMESPACE = "windows-mcp-session-001";
 
 function policy(
   capabilityId: string,
@@ -136,6 +139,9 @@ function observationFixture(
       observationEpoch: "observation-001",
       observationEvidenceSha256:
         evidenceSha256,
+      providerDescriptorSha256: PROVIDER_DESCRIPTOR_SHA,
+      providerGenerationSha256: PROVIDER_GENERATION_SHA,
+      evidenceNamespace: EVIDENCE_NAMESPACE,
       elementEvidenceSha256:
         "2".repeat(64),
       inputSecurity: "ORDINARY_TEXT",
@@ -162,8 +168,20 @@ function observationFixture(
         observationRequest,
       ),
     observedAt: NOW,
-    displayIds: Object.freeze([]),
+    displayIds: Object.freeze(scope.displayIds ?? []),
+    displayTopologyEpoch: scope.displayTopologyEpoch ?? "topology-001",
     windowId: "window-editor",
+    providerDescriptorSha256: PROVIDER_DESCRIPTOR_SHA,
+    providerGenerationSha256: PROVIDER_GENERATION_SHA,
+    evidenceNamespace: EVIDENCE_NAMESPACE,
+    geometry: Object.freeze({
+      coordinateSpace: scope.displayIds ? "DESKTOP_PHYSICAL" as const : "WINDOW_CLIENT_PHYSICAL" as const,
+      bounds: scope.region ?? { left: 0, top: 0, right: 1920, bottom: 1080 },
+      displayTopologyEpoch: scope.displayTopologyEpoch ?? "topology-001",
+    }),
+    matched: null,
+    completionReason: null,
+    cancellationStatus: "NOT_REQUESTED" as const,
     evidenceSha256,
     artifacts: Object.freeze([
       Object.freeze({
@@ -216,6 +234,13 @@ function observationFixture(
     windowId: string,
   ) => `${hostId}\n${sessionId}\n${windowId}`;
   const observationHeadRuntime = {
+    resolveCurrentProviderIdentity() {
+      return {
+        providerDescriptorSha256: PROVIDER_DESCRIPTOR_SHA,
+        providerGenerationSha256: PROVIDER_GENERATION_SHA,
+        evidenceNamespace: EVIDENCE_NAMESPACE,
+      };
+    },
     publishCurrentObservationHead(
       head: DesktopObservationHead,
     ) {
@@ -273,6 +298,9 @@ function observationFixture(
     sessionId: "host-session-001",
     windowId: "window-editor",
     observationEpoch: "observation-001",
+    providerDescriptorSha256: PROVIDER_DESCRIPTOR_SHA,
+    providerGenerationSha256: PROVIDER_GENERATION_SHA,
+    evidenceNamespace: EVIDENCE_NAMESPACE,
     status: "OK",
     evidenceSha256,
     receiptSha256:
@@ -625,6 +653,9 @@ test("P17 refuses stale P16 observation before adapter entry", async () => {
     sessionId: "host-session-001",
     windowId: "window-editor",
     observationEpoch: "newer-observation",
+    providerDescriptorSha256: PROVIDER_DESCRIPTOR_SHA,
+    providerGenerationSha256: PROVIDER_GENERATION_SHA,
+    evidenceNamespace: EVIDENCE_NAMESPACE,
     status: "OK",
     evidenceSha256: "3".repeat(64),
     receiptSha256: "4".repeat(64),
@@ -656,6 +687,8 @@ test("P17 atomically claims the exact P16 head and refuses a freshness race befo
   };
   const base = ctx.observationHeadRuntime;
   const racingRuntime = {
+    resolveCurrentProviderIdentity:
+      base.resolveCurrentProviderIdentity.bind(base),
     publishCurrentObservationHead:
       base.publishCurrentObservationHead.bind(base),
     resolveCurrentObservationHead:
@@ -672,6 +705,9 @@ test("P17 atomically claims the exact P16 head and refuses a freshness race befo
         windowId: "window-editor",
         observationEpoch:
           "racing-newer-observation",
+        providerDescriptorSha256: PROVIDER_DESCRIPTOR_SHA,
+        providerGenerationSha256: PROVIDER_GENERATION_SHA,
+        evidenceNamespace: EVIDENCE_NAMESPACE,
         status: "OK",
         evidenceSha256: "a".repeat(64),
         receiptSha256: "b".repeat(64),
@@ -697,7 +733,7 @@ test("P17 atomically claims the exact P16 head and refuses a freshness race befo
   assert.equal(calls, 0);
 });
 
-test("P17 coordinate click must remain inside the exact P16 region", async () => {
+test("P16B/P17 coordinate click consumes exact coordinate-space and topology geometry", async () => {
   const fixture = observationFixture();
   const inside: DesktopPointerClickRequest = {
     kind: "POINTER_CLICK",
@@ -707,6 +743,7 @@ test("P17 coordinate click must remain inside the exact P16 region", async () =>
     observation: fixture.observation,
     target: {
       kind: "COORDINATE",
+      coordinateSpace: "WINDOW_CLIENT_PHYSICAL",
       x: 799,
       y: 599,
     },
@@ -728,6 +765,7 @@ test("P17 coordinate click must remain inside the exact P16 region", async () =>
     ...inside,
     target: {
       kind: "COORDINATE",
+      coordinateSpace: "WINDOW_CLIENT_PHYSICAL",
       x: 800,
       y: 599,
     },
@@ -742,11 +780,12 @@ test("P17 coordinate click must remain inside the exact P16 region", async () =>
         randomId: () => "interaction-coordinate-bad",
       },
     ),
-    /outside authorized P16 region/,
+    /outside authorized P16 geometry/,
   );
 
   const displayScope: DesktopObservationScope = {
     displayIds: [0],
+    displayTopologyEpoch: "topology-001",
   };
   const displayFixture =
     observationFixture(displayScope);
@@ -759,6 +798,8 @@ test("P17 coordinate click must remain inside the exact P16 region", async () =>
     target: {
       kind: "COORDINATE",
       displayId: 0,
+      displayTopologyEpoch: "topology-001",
+      coordinateSpace: "DESKTOP_PHYSICAL",
       x: 10,
       y: 10,
     },
@@ -770,8 +811,7 @@ test("P17 coordinate click must remain inside the exact P16 region", async () =>
     {},
     displayScope,
   );
-  await assert.rejects(
-    interactGovernedDesktop(
+  const displayOutcome = await interactGovernedDesktop(
       displayCtx.adapter,
       displayCtx.input,
       {
@@ -779,9 +819,25 @@ test("P17 coordinate click must remain inside the exact P16 region", async () =>
         randomId: () =>
           "interaction-display-without-geometry",
       },
-    ),
-    /requires explicit bounded P16 region/,
   );
+  assert.equal(displayOutcome.receipt.status, "OK");
+
+  const wrongSpaceCtx = makeContext({
+    ...inside,
+    target: { kind: "COORDINATE", coordinateSpace: "DESKTOP_PHYSICAL", x: 10, y: 10 },
+  });
+  await assert.rejects(() => interactGovernedDesktop(wrongSpaceCtx.adapter, wrongSpaceCtx.input, {
+    now: () => new Date(NOW), randomId: () => "interaction-wrong-space",
+  }), /coordinate space mismatch/);
+
+  const staleTopologyRequest: DesktopPointerClickRequest = {
+    ...displayRequest,
+    target: { kind: "COORDINATE", displayId: 0, displayTopologyEpoch: "topology-stale", coordinateSpace: "DESKTOP_PHYSICAL", x: 10, y: 10 },
+  };
+  const staleTopologyCtx = makeContext(staleTopologyRequest, "NON_REPLAYABLE", {}, displayScope);
+  await assert.rejects(() => interactGovernedDesktop(staleTopologyCtx.adapter, staleTopologyCtx.input, {
+    now: () => new Date(NOW), randomId: () => "interaction-stale-topology",
+  }), /stale or not authorized by P16 topology evidence/);
 });
 
 test("P17 ordinary text input is separate from secret/password entry and receipts do not persist raw text", async () => {

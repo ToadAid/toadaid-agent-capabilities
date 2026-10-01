@@ -8,6 +8,7 @@ import type {
   CapabilityInvocationContractReadyReceipt,
 } from "./capabilityContractTypes.js";
 import type {
+  DesktopCoordinateSpace,
   DesktopObservationHeadRuntime,
   DesktopObservationReceipt,
   DesktopObservationRequest,
@@ -58,6 +59,8 @@ export interface DesktopElementTarget {
 export interface DesktopCoordinateTarget {
   readonly kind: "COORDINATE";
   readonly displayId?: number;
+  readonly displayTopologyEpoch?: string;
+  readonly coordinateSpace: DesktopCoordinateSpace;
   readonly x: number;
   readonly y: number;
 }
@@ -142,6 +145,8 @@ export interface NormalizedDesktopElementTarget {
 export interface NormalizedDesktopCoordinateTarget {
   readonly kind: "COORDINATE";
   readonly displayId: number | null;
+  readonly displayTopologyEpoch: string | null;
+  readonly coordinateSpace: DesktopCoordinateSpace;
   readonly x: number;
   readonly y: number;
 }

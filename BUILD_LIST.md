@@ -305,7 +305,7 @@ Checkbox law: mark an item complete only when the implementation is landed on ca
   - bind availability to live provider/module/host-session identity without granting action authority
   - prove provider disappearance, degradation, restart, module disable/remove, or selection change invalidates stale runtime bindings
 
-- [ ] **P16B — Observation evidence semantics hardening**
+- [x] **P16B — Observation evidence semantics hardening**
   - treat bounded wait timeout (`matched=false`) as a valid observation with explicit `completionReason: MATCHED | TIMED_OUT`, not malformed adapter output
   - bind live element/window evidence to provider generation/evidence namespace so provider restart makes old live references provably stale
   - exact-window observation emits authorized geometry with explicit coordinate space and display-topology evidence so P17 raw-coordinate targeting has a valid contract path

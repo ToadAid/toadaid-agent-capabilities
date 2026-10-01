@@ -32,6 +32,7 @@ import {
 import type {
   DesktopObservationAdapterRegistration,
   DesktopObservationHead,
+  DesktopObservationProviderIdentity,
   DesktopObservationRequest,
   DesktopScreenshotRequest,
   GovernedDesktopObservationAdapter,
@@ -92,7 +93,7 @@ function screenshotRequest(): DesktopScreenshotRequest {
     hostId: "dell7920",
     sessionId: "host-session-001",
     ownerId: "agent0",
-    scope: { displayIds: [0] },
+    scope: { displayIds: [0], displayTopologyEpoch: "topology-001" },
     annotate: false,
     maxWallClockMs: 5_000,
   };
@@ -216,6 +217,11 @@ function makeContext(
     },
     compatibility,
   };
+  const providerIdentity: DesktopObservationProviderIdentity = Object.freeze({
+    providerDescriptorSha256: contractBinding.providerDescriptorSha256,
+    providerGenerationSha256: "7".repeat(64),
+    evidenceNamespace: "windows-mcp-session-001",
+  });
 
   const lease = createHostConnectorSessionLease(
     {
@@ -245,6 +251,11 @@ function makeContext(
           adapterRequest.parameters.displayIds,
         windowId:
           adapterRequest.parameters.windowId,
+        displayTopologyEpoch:
+          adapterRequest.parameters.displayTopologyEpoch ?? "topology-001",
+        ...(adapterRequest.parameters.kind === "UI_SNAPSHOT" && adapterRequest.parameters.windowId !== null
+          ? { geometry: { coordinateSpace: "WINDOW_CLIENT_PHYSICAL" as const, bounds: { left: 0, top: 0, right: 800, bottom: 600 }, displayTopologyEpoch: "topology-001" } }
+          : {}),
         evidenceSha256: "f".repeat(64),
         artifacts: [
           {
@@ -279,7 +290,7 @@ function makeContext(
           : {}),
         ...(adapterRequest.parameters.kind ===
         "WAIT_FOR"
-          ? { matched: true }
+          ? { matched: true, completionReason: "MATCHED" as const, cancellationStatus: "NOT_REQUESTED" as const }
           : {}),
       };
     },
@@ -304,12 +315,16 @@ function makeContext(
     string,
     DesktopObservationHead
   >();
+  let currentProviderIdentity = providerIdentity;
   const observationHeadKey = (
     hostId: string,
     sessionId: string,
     windowId: string,
   ) => `${hostId}\n${sessionId}\n${windowId}`;
   const observationHeadRuntime = {
+    resolveCurrentProviderIdentity() {
+      return currentProviderIdentity;
+    },
     publishCurrentObservationHead(
       head: DesktopObservationHead,
     ) {
@@ -371,11 +386,15 @@ function makeContext(
     invocation,
     contractBinding,
     contractReady,
+    providerIdentity,
     lease,
     registration,
     adapter,
     budget,
     observationHeadRuntime,
+    setProviderIdentity(next: typeof providerIdentity) {
+      currentProviderIdentity = next;
+    },
     input: {
       lease,
       leaseRuntime: {
@@ -392,6 +411,7 @@ function makeContext(
       contractRequirement: requirement,
       contractRegistry: registry,
       budget,
+      providerIdentity,
       request,
     },
   };
@@ -437,8 +457,9 @@ test("P16 screenshot refuses ambient full-desktop capture and ambiguous scope", 
         hostId: "dell7920",
         sessionId: "host-session-001",
         ownerId: "agent0",
-        scope: {
+    scope: {
           displayIds: [0],
+          displayTopologyEpoch: "topology-001",
           region: {
             left: 0,
             top: 0,
@@ -474,6 +495,8 @@ test("P16 successful screenshot crosses P15/P3/C1/H1 and spends Q1 budget before
     outcome.receipt.observationEpoch,
     "observation-001",
   );
+  assert.equal(outcome.receipt.providerGenerationSha256, ctx.providerIdentity.providerGenerationSha256);
+  assert.equal(outcome.receipt.evidenceNamespace, ctx.providerIdentity.evidenceNamespace);
   assert.deepEqual(
     outcome.receipt.displayIds,
     [0],
@@ -686,6 +709,8 @@ test("P16 UI element references bind exact observation/window epoch and stale af
     },
   );
   assert.equal(first.receipt.status, "OK");
+  assert.equal(first.receipt.geometry?.coordinateSpace, "WINDOW_CLIENT_PHYSICAL");
+  assert.deepEqual(first.receipt.geometry?.bounds, { left: 0, top: 0, right: 800, bottom: 600 });
   assert.equal(first.receipt.elements.length, 1);
   const element = first.receipt.elements[0]!;
   assert.doesNotThrow(() =>
@@ -835,6 +860,7 @@ test("P16 rejects artifact-kind confusion and windowless reusable UI element evi
           hostId: adapterRequest.hostId,
           sessionId: adapterRequest.sessionId,
           displayIds: [0],
+          displayTopologyEpoch: "topology-001",
           windowId: null,
           evidenceSha256: "8".repeat(64),
           artifacts: [
@@ -868,7 +894,7 @@ test("P16 rejects artifact-kind confusion and windowless reusable UI element evi
     hostId: "dell7920",
     sessionId: "host-session-001",
     ownerId: "agent0",
-    scope: { displayIds: [0] },
+    scope: { displayIds: [0], displayTopologyEpoch: "topology-001" },
     includeScreenshot: false,
     useDom: false,
     maxElements: 10,
@@ -886,6 +912,7 @@ test("P16 rejects artifact-kind confusion and windowless reusable UI element evi
           hostId: adapterRequest.hostId,
           sessionId: adapterRequest.sessionId,
           displayIds: [0],
+          displayTopologyEpoch: "topology-001",
           windowId: "window-editor",
           evidenceSha256: "6".repeat(64),
           artifacts: [
@@ -1032,6 +1059,9 @@ test("P16 wait-for is exact-window scoped with bounded timeout/interval and one 
 
   assert.equal(calls, 1);
   assert.equal(outcome.receipt.status, "OK");
+  assert.equal(outcome.receipt.matched, true);
+  assert.equal(outcome.receipt.completionReason, "MATCHED");
+  assert.equal(outcome.receipt.cancellationStatus, "NOT_REQUESTED");
   assert.equal(
     outcome.receipt.windowId,
     "window-editor",
@@ -1044,4 +1074,89 @@ test("P16 wait-for is exact-window scoped with bounded timeout/interval and one 
     outcome.receipt.budget.reservedCost.wallClockMs,
     2_000,
   );
+});
+
+test("P16B wait timeout is valid evidence and preserves cancellation delivery truth", async () => {
+  const statuses = ["REQUESTED", "DELIVERED", "CONFIRMED_QUIESCENT", "UNCERTAIN"] as const;
+  for (const cancellationStatus of statuses) {
+    const request: DesktopObservationRequest = {
+      kind: "WAIT_FOR", hostId: "dell7920", sessionId: "host-session-001", ownerId: "agent0",
+      windowId: "window-editor", condition: "text_exists", text: "Never appears", timeoutMs: 2_000, intervalMs: 250,
+    };
+    const ctx = makeContext(request);
+    const adapter: GovernedDesktopObservationAdapter = {
+      ...ctx.adapter,
+      async observe(adapterRequest) {
+        return { ...(await ctx.adapter.observe(adapterRequest)), matched: false, completionReason: "TIMED_OUT", cancellationStatus };
+      },
+    };
+    const outcome = await observeGovernedDesktop(adapter, ctx.input, {
+      now: () => new Date(NOW), randomId: () => `wait-${cancellationStatus.toLowerCase()}`,
+    });
+    assert.equal(outcome.receipt.status, "OK");
+    assert.equal(outcome.receipt.matched, false);
+    assert.equal(outcome.receipt.completionReason, "TIMED_OUT");
+    assert.equal(outcome.receipt.cancellationStatus, cancellationStatus);
+  }
+  const invalid = makeContext({
+    kind: "WAIT_FOR", hostId: "dell7920", sessionId: "host-session-001", ownerId: "agent0",
+    windowId: "window-editor", condition: "active_window", timeoutMs: 2_000, intervalMs: 250,
+  });
+  const invalidOutcome = await observeGovernedDesktop({
+    ...invalid.adapter,
+    async observe(adapterRequest) {
+      return { ...(await invalid.adapter.observe(adapterRequest)), matched: false, completionReason: "MATCHED" };
+    },
+  }, invalid.input, { now: () => new Date(NOW), randomId: () => "wait-invalid-completion" });
+  assert.equal(invalidOutcome.receipt.status, "DEGRADED");
+  assert.equal(invalidOutcome.receipt.degradedReason, "ADAPTER_RESULT_INVALID");
+});
+
+test("P16B wait must fit inside the remaining P15 lease lifetime", async () => {
+  const request: DesktopObservationRequest = {
+    kind: "WAIT_FOR", hostId: "dell7920", sessionId: "host-session-001", ownerId: "agent0",
+    windowId: "window-editor", condition: "active_window", timeoutMs: 60_001, intervalMs: 500,
+  };
+  const ctx = makeContext(request);
+  let calls = 0;
+  const adapter: GovernedDesktopObservationAdapter = {
+    ...ctx.adapter,
+    async observe(adapterRequest) { calls += 1; return ctx.adapter.observe(adapterRequest); },
+  };
+  await assert.rejects(() => observeGovernedDesktop(adapter, ctx.input, {
+    now: () => new Date(NOW), randomId: () => "wait-too-long",
+  }), /remaining host connector lease lifetime/);
+  assert.equal(calls, 0);
+});
+
+test("P16B numeric displays require topology epoch and adapter topology must match", async () => {
+  assert.throws(() => normalizeDesktopObservationRequest({
+    kind: "SCREENSHOT", hostId: "dell7920", sessionId: "host-session-001", ownerId: "agent0", scope: { displayIds: [0] },
+  }), /requires exact displayTopologyEpoch/);
+  const ctx = makeContext(screenshotRequest());
+  const adapter: GovernedDesktopObservationAdapter = {
+    ...ctx.adapter,
+    async observe(adapterRequest) {
+      return { ...(await ctx.adapter.observe(adapterRequest)), displayTopologyEpoch: "topology-new" };
+    },
+  };
+  const outcome = await observeGovernedDesktop(adapter, ctx.input, {
+    now: () => new Date(NOW), randomId: () => "topology-mismatch",
+  });
+  assert.equal(outcome.receipt.status, "DEGRADED");
+  assert.equal(outcome.receipt.degradedReason, "ADAPTER_RESULT_INVALID");
+});
+
+test("P16B provider restart invalidates live window and element evidence without another capture", async () => {
+  const request: DesktopObservationRequest = {
+    kind: "UI_SNAPSHOT", hostId: "dell7920", sessionId: "host-session-001", ownerId: "agent0",
+    windowId: "window-editor", includeScreenshot: false, useDom: false, maxElements: 10, maxWallClockMs: 5_000,
+  };
+  const ctx = makeContext(request);
+  const outcome = await observeGovernedDesktop(ctx.adapter, ctx.input, {
+    now: () => new Date(NOW), randomId: () => "provider-generation-one",
+  });
+  const element = outcome.receipt.elements[0]!;
+  ctx.setProviderIdentity({ ...ctx.providerIdentity, providerGenerationSha256: "8".repeat(64), evidenceNamespace: "windows-mcp-session-002" });
+  assert.throws(() => assertDesktopElementReferenceCurrent(element, outcome.receipt, ctx.observationHeadRuntime), /provider generation or evidence namespace is stale/);
 });
