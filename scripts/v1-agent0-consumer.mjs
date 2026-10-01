@@ -6,9 +6,12 @@ import {
   CORE_CAPABILITY_MANIFEST,
   HOST_SERVICE_CONTRACT_IDS,
   HOST_SERVICE_TOOL_NAMES,
+  composeAvailableCapabilityRuntimeProviderRegistry,
+  composeCapabilityAvailabilityProjection,
   composeCapabilityProviderRegistry,
   composeCapabilityRuntimeProviderRegistry,
   createCapabilityModuleManifest,
+  createCapabilityProviderHealthReport,
   createCapabilityProviderSelection,
   checkpointRunStateCapsule,
   childTaskSha256,
@@ -23,6 +26,8 @@ import {
   resolveCapabilityAuthority,
   resolveHumanInterrupt,
   resolveCapabilityProvider,
+  resolveAvailableCapabilityProvider,
+  resolveAvailableCapabilityRuntimeProvider,
   resolveCapabilityRuntimeProvider,
   resolveResumeCapabilityAuthority,
   resumeRunStateCapsule,
@@ -169,6 +174,51 @@ assert.equal(
   ),
   specializedHostProvider,
 );
+const hostIdentity = {
+  hostId: "v1-host",
+  sessionId: "v1-session",
+  hostSessionLeaseSha256: sha("v1-host-session-lease"),
+  operatingSystem: "linux",
+  architecture: "x64",
+  runtimeIds: ["node-24"],
+};
+const hostHealth = createCapabilityProviderHealthReport(
+  resolvedHostProvider,
+  hostIdentity,
+  {
+    providerGenerationSha256: sha("v1-specialized-host-generation"),
+    status: "AVAILABLE_HEALTHY",
+    observedAt: t(1),
+    expiresAt: t(20),
+  },
+);
+const hostAvailability = composeCapabilityAvailabilityProjection({
+  modules: [hostProviderEnabled],
+  builtInCapabilities: CORE_CAPABILITY_MANIFEST.capabilities.filter((item) => item.id === "browser:evidence"),
+  selections: [hostProviderSelection],
+  host: hostIdentity,
+  healthReports: [hostHealth],
+  policyLayers: [{ scope: "agent", subject: "v1-agent0", decisions: { "host:notification": "ALLOW" } }],
+  checkedAt: t(2),
+});
+assert.equal(hostAvailability.providers[0].authority.decision, "ALLOW");
+assert.equal(resolveAvailableCapabilityProvider(
+  hostAvailability,
+  "host:notification",
+  HOST_SERVICE_TOOL_NAMES["host:notification"],
+  "HOST_SERVICE",
+).providerGenerationSha256, sha("v1-specialized-host-generation"));
+const availableHostRuntime = composeAvailableCapabilityRuntimeProviderRegistry(
+  hostAvailability,
+  [{ moduleId: hostProviderManifest.moduleId, provider: specializedHostProvider }],
+);
+assert.equal(resolveAvailableCapabilityRuntimeProvider(
+  availableHostRuntime,
+  hostAvailability,
+  "host:notification",
+  HOST_SERVICE_TOOL_NAMES["host:notification"],
+  "HOST_SERVICE",
+), specializedHostProvider);
 
 const resolvedRoot = fileURLToPath(import.meta.resolve("@toadaid/agent-capabilities"));
 assert.match(resolvedRoot, /node_modules[\\/]@toadaid[\\/]agent-capabilities[\\/]dist[\\/]src[\\/]index\.js$/);

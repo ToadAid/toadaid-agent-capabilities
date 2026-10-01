@@ -297,7 +297,7 @@ Checkbox law: mark an item complete only when the implementation is landed on ca
   - invocation binding retains exact contract descriptor SHA + selected adapter registration SHA + implementation fingerprint; provider changes require explicit rebind
   - schema IDs without enforceable digests must not be described as self-describing contract truth
 
-- [ ] **P19 — Provider selection + availability + health projection**
+- [x] **P19 — Provider selection + availability + health projection**
   - separate `KNOWN`, `INSTALLED`, `ENABLED`, `AVAILABLE`, and `AUTHORIZED`; none may silently imply another
   - health refines availability as `AVAILABLE_HEALTHY`, `AVAILABLE_DEGRADED`, or `UNAVAILABLE` and remains non-authority state
   - compose the active P3 installed manifest from built-ins plus installed/enabled module projections instead of treating the full capability catalog as installed truth

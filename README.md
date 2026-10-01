@@ -37,6 +37,7 @@ Implemented lanes:
 - **P17 — governed desktop interaction:** split pointer click/move, scroll, ordinary text input, and shortcuts into separately authorized mutations bound to current P16 evidence, live P15/P3/C1/H1 authority, Q1 budget, and X1 non-replayable uncertainty handling.
 - **P18 — governed host services:** expose app launch, clipboard, process, file, notification, registry, and structured command execution as narrow BLOCK-by-default contracts with canonical scope, P15/P3/C1/H1/Q1 checks, and X1 reconciliation for mutations.
 - **P14B — typed provider module composition:** compose connector, desktop-observation, desktop-interaction, and host-service registrations from exact enabled P14 lifecycle heads; separate known/installed/enabled capability truth, require explicit selection for duplicate providers, and bind dispatch resolution to lifecycle/registration/descriptor/implementation identity.
+- **P19 — provider selection + availability + health projection:** project host-compatible providers through sealed live health and generation evidence, keep known/installed/enabled/available/authorized truth distinct, and bind runtime resolution to the exact host session and availability projection.
 
 See [`BUILD_LIST.md`](./BUILD_LIST.md) for the canonical roadmap.
 
@@ -83,6 +84,8 @@ Browser resilience evidence is recovery state, not browser authority; stale DOM 
 Package installation makes code available; it never grants authority. Distribution checks prove export/build integrity only, and V1 must consume the package boundary instead of repository source paths.
 
 Connector adapters are runtime implementations, not grants. P12 only invokes an adapter after exact H1/C1 identity and argument binding; provider-specific code cannot widen authority, silently swap implementation provenance, materialize secrets, or claim invocation completion on its own.
+
+Provider availability and health are live routing evidence, never authority. P19 chooses only host-compatible enabled providers with current sealed health, while P3 authorization remains an independent decision; provider restart, disappearance, health change, session change, module transition, or provider-selection change invalidates the old availability-bound runtime registry.
 
 Connector execution uncertainty is evidence, not permission to retry. P13 requires X1 replay classification before provider entry and converts any post-entry ambiguity into reconciliation while leaving H1 active; only X1 reconciliation may later determine whether retry, no retry, or a new invocation is required.
 

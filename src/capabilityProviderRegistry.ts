@@ -1,5 +1,6 @@
 import {
   createCapabilityManifest,
+  resolveCapabilityAuthority,
 } from "./capabilityPolicy.js";
 import {
   capabilityContractDescriptorSha256,
@@ -22,6 +23,7 @@ import {
 } from "./capabilityModuleLifecycle.js";
 import {
   boundedId,
+  canonicalIso,
   sha,
   sha256,
 } from "./invocationSchema.js";
@@ -36,13 +38,20 @@ import type {
 } from "./capabilityModuleLifecycleTypes.js";
 import type {
   CapabilityProviderAdapterKind,
+  CapabilityAvailabilityProjection,
+  CapabilityAvailableRuntimeProviderRegistry,
+  CapabilityProviderAvailabilityBinding,
   CapabilityProviderBinding,
+  CapabilityProviderHealthReport,
+  CapabilityProviderHostIdentity,
   CapabilityProviderRegistry,
   CapabilityProviderSelection,
   CapabilityRuntimeProviderCandidate,
   CapabilityRuntimeProviderForKind,
   CapabilityRuntimeProviderRegistry,
+  ComposeCapabilityAvailabilityProjectionInput,
   ComposeCapabilityProviderRegistryInput,
+  CreateCapabilityProviderHealthReportInput,
 } from "./capabilityProviderRegistryTypes.js";
 
 export type * from "./capabilityProviderRegistryTypes.js";
@@ -546,6 +555,336 @@ export function resolveCapabilityRuntimeProvider<
       selected.adapterRegistrationSha256
   ) {
     throw new Error("selected runtime provider implementation drifted");
+  }
+  return binding.provider as CapabilityRuntimeProviderForKind<Kind>;
+}
+
+const PLATFORM_VALUE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
+
+function normalizeHostIdentity(
+  input: CapabilityProviderHostIdentity,
+): CapabilityProviderHostIdentity {
+  const platformValue = (value: string, label: string): string => {
+    if (!PLATFORM_VALUE_PATTERN.test(value)) throw new TypeError(`${label} is invalid`);
+    return value.toLowerCase();
+  };
+  const runtimeIds = [...input.runtimeIds].map((value, index) =>
+    platformValue(value, `host.runtimeIds[${index}]`)
+  ).sort();
+  if (new Set(runtimeIds).size !== runtimeIds.length) {
+    throw new TypeError("host.runtimeIds contains duplicates");
+  }
+  return Object.freeze({
+    hostId: boundedId(input.hostId, "host.hostId"),
+    sessionId: boundedId(input.sessionId, "host.sessionId"),
+    hostSessionLeaseSha256: sha(
+      input.hostSessionLeaseSha256,
+      "host.hostSessionLeaseSha256",
+    )!,
+    operatingSystem: platformValue(input.operatingSystem, "host.operatingSystem"),
+    architecture: platformValue(input.architecture, "host.architecture"),
+    runtimeIds: Object.freeze(runtimeIds),
+  });
+}
+
+function healthReportCore(
+  report: Omit<CapabilityProviderHealthReport, "reportSha256"> |
+    CapabilityProviderHealthReport,
+): Omit<CapabilityProviderHealthReport, "reportSha256"> {
+  const { reportSha256: _ignored, ...core } = report as CapabilityProviderHealthReport;
+  return core;
+}
+
+export function createCapabilityProviderHealthReport(
+  provider: CapabilityProviderBinding,
+  hostInput: CapabilityProviderHostIdentity,
+  input: CreateCapabilityProviderHealthReportInput,
+): CapabilityProviderHealthReport {
+  const statuses = ["AVAILABLE_HEALTHY", "AVAILABLE_DEGRADED", "UNAVAILABLE"] as const;
+  if (!statuses.includes(input.status)) throw new TypeError("provider health status is invalid");
+  const observedAt = canonicalIso(input.observedAt, "health.observedAt");
+  const expiresAt = canonicalIso(input.expiresAt, "health.expiresAt");
+  if (Date.parse(expiresAt) <= Date.parse(observedAt)) {
+    throw new RangeError("provider health expiresAt must be later than observedAt");
+  }
+  const core = Object.freeze({
+    schemaVersion: "toadaid.capability-provider-health.v1" as const,
+    moduleId: boundedId(provider.moduleId, "health.moduleId"),
+    adapterId: boundedId(provider.adapterId, "health.adapterId"),
+    lifecycleRecordSha256: sha(provider.lifecycleRecordSha256, "health.lifecycleRecordSha256")!,
+    providerDescriptorSha256: sha(provider.providerDescriptorSha256, "health.providerDescriptorSha256")!,
+    adapterRegistrationSha256: sha(provider.adapterRegistrationSha256, "health.adapterRegistrationSha256")!,
+    implementationFingerprintSha256: sha(provider.implementationFingerprintSha256, "health.implementationFingerprintSha256")!,
+    host: normalizeHostIdentity(hostInput),
+    providerGenerationSha256: sha(input.providerGenerationSha256, "health.providerGenerationSha256")!,
+    status: input.status,
+    observedAt,
+    expiresAt,
+    evidenceSha256: sha(input.evidenceSha256, "health.evidenceSha256", true),
+  });
+  return Object.freeze({ ...core, reportSha256: sha256(core) });
+}
+
+export function validateCapabilityProviderHealthReport(
+  input: CapabilityProviderHealthReport,
+): CapabilityProviderHealthReport {
+  if (input.schemaVersion !== "toadaid.capability-provider-health.v1") {
+    throw new TypeError("unsupported capability provider health schemaVersion");
+  }
+  const rebuilt = createCapabilityProviderHealthReport({
+    moduleId: input.moduleId,
+    adapterId: input.adapterId,
+    lifecycleRecordSha256: input.lifecycleRecordSha256,
+    providerDescriptorSha256: input.providerDescriptorSha256,
+    adapterRegistrationSha256: input.adapterRegistrationSha256,
+    implementationFingerprintSha256: input.implementationFingerprintSha256,
+  } as CapabilityProviderBinding, input.host, {
+    providerGenerationSha256: input.providerGenerationSha256,
+    status: input.status,
+    observedAt: input.observedAt,
+    expiresAt: input.expiresAt,
+    ...(input.evidenceSha256 === null ? {} : { evidenceSha256: input.evidenceSha256 }),
+  });
+  if (rebuilt.reportSha256 !== input.reportSha256 ||
+      sha256(healthReportCore(input)) !== input.reportSha256) {
+    throw new Error("capability provider health integrity mismatch");
+  }
+  return rebuilt;
+}
+
+function availabilityProjectionCore(
+  projection: Omit<CapabilityAvailabilityProjection, "projectionSha256"> |
+    CapabilityAvailabilityProjection,
+): Omit<CapabilityAvailabilityProjection, "projectionSha256"> {
+  const { projectionSha256: _ignored, ...core } =
+    projection as CapabilityAvailabilityProjection;
+  return core;
+}
+
+export function capabilityAvailabilityProjectionSha256(
+  projection: CapabilityAvailabilityProjection,
+): string {
+  if (projection.schemaVersion !== "toadaid.capability-availability-projection.v1") {
+    throw new TypeError("unsupported capability availability projection schemaVersion");
+  }
+  const digest = sha(projection.projectionSha256, "projectionSha256")!;
+  if (digest !== sha256(availabilityProjectionCore(projection))) {
+    throw new Error("capability availability projection integrity mismatch");
+  }
+  return digest;
+}
+
+function platformCompatible(
+  provider: CapabilityProviderBinding,
+  host: CapabilityProviderHostIdentity,
+): boolean {
+  const requirements = provider.providerImplementation.platformRequirements;
+  return (requirements.operatingSystems.length === 0 || requirements.operatingSystems.includes(host.operatingSystem)) &&
+    (requirements.architectures.length === 0 || requirements.architectures.includes(host.architecture)) &&
+    requirements.runtimeIds.every((runtimeId) => host.runtimeIds.includes(runtimeId));
+}
+
+function healthMatches(
+  report: CapabilityProviderHealthReport,
+  provider: CapabilityProviderBinding,
+  host: CapabilityProviderHostIdentity,
+): boolean {
+  return report.moduleId === provider.moduleId &&
+    report.adapterId === provider.adapterId &&
+    report.lifecycleRecordSha256 === provider.lifecycleRecordSha256 &&
+    report.providerDescriptorSha256 === provider.providerDescriptorSha256 &&
+    report.adapterRegistrationSha256 === provider.adapterRegistrationSha256 &&
+    report.implementationFingerprintSha256 === provider.implementationFingerprintSha256 &&
+    sha256(report.host) === sha256(host);
+}
+
+export function composeCapabilityAvailabilityProjection(
+  input: ComposeCapabilityAvailabilityProjectionInput,
+): CapabilityAvailabilityProjection {
+  const checkedAt = canonicalIso(input.checkedAt, "checkedAt");
+  const host = normalizeHostIdentity(input.host);
+  const moduleIds = new Set<string>();
+  const heads = input.modules.map((item) => {
+    const head = validateCapabilityModuleLifecycleEnvelope(item);
+    if (moduleIds.has(head.record.moduleId)) throw new TypeError(`duplicate current capability module head: ${head.record.moduleId}`);
+    moduleIds.add(head.record.moduleId);
+    return head;
+  }).sort((a, b) => a.record.moduleId.localeCompare(b.record.moduleId));
+  const builtIns = input.builtInCapabilities ?? [];
+  const knownCapabilityManifest = mergeCapabilityDefinitions([
+    input.knownCapabilities ?? [], builtIns,
+    ...heads.map((item) => item.record.manifest.capabilityManifest.capabilities),
+  ]);
+  const installedCapabilityManifest = mergeCapabilityDefinitions([
+    builtIns,
+    ...heads.filter((item) => item.record.state !== "REMOVED")
+      .map((item) => item.record.manifest.capabilityManifest.capabilities),
+  ]);
+  const enabledHeads = heads.filter((item) => item.record.state === "INSTALLED_ENABLED");
+  const enabledCapabilityManifest = mergeCapabilityDefinitions([
+    builtIns,
+    ...enabledHeads.map((item) => item.record.manifest.capabilityManifest.capabilities),
+  ]);
+  const candidates = enabledHeads.flatMap((item) => {
+    const projection = projectEnabledCapabilityModule(item);
+    return projection.adapters.map((registration) => bindingFromProjection(projection, registration));
+  });
+  assertNoLegacyStructuredAliasCollision(candidates);
+  const reports = input.healthReports.map(validateCapabilityProviderHealthReport);
+  const matchedReports = new Set<string>();
+  const eligible: Array<{ provider: CapabilityProviderBinding; report: CapabilityProviderHealthReport }> = [];
+  const unavailableProviders: Array<{ status: "UNAVAILABLE"; provider: CapabilityProviderBinding; reason: "PLATFORM_INCOMPATIBLE" | "HEALTH_MISSING" | "HEALTH_EXPIRED" | "PROVIDER_REPORTED_UNAVAILABLE"; providerGenerationSha256: string | null; healthReportSha256: string | null }> = [];
+  for (const provider of candidates) {
+    if (!platformCompatible(provider, host)) {
+      unavailableProviders.push(Object.freeze({ status: "UNAVAILABLE", provider, reason: "PLATFORM_INCOMPATIBLE", providerGenerationSha256: null, healthReportSha256: null }));
+      continue;
+    }
+    const matches = reports.filter((report) => healthMatches(report, provider, host));
+    if (matches.length > 1) throw new TypeError(`duplicate provider health report: ${provider.moduleId}/${provider.adapterId}`);
+    const report = matches[0];
+    if (!report) {
+      unavailableProviders.push(Object.freeze({ status: "UNAVAILABLE", provider, reason: "HEALTH_MISSING", providerGenerationSha256: null, healthReportSha256: null }));
+      continue;
+    }
+    matchedReports.add(report.reportSha256);
+    if (Date.parse(report.observedAt) > Date.parse(checkedAt)) {
+      throw new Error(`provider health report is from the future: ${provider.moduleId}/${provider.adapterId}`);
+    }
+    if (Date.parse(report.expiresAt) <= Date.parse(checkedAt)) {
+      unavailableProviders.push(Object.freeze({ status: "UNAVAILABLE", provider, reason: "HEALTH_EXPIRED", providerGenerationSha256: report.providerGenerationSha256, healthReportSha256: report.reportSha256 }));
+    } else if (report.status === "UNAVAILABLE") {
+      unavailableProviders.push(Object.freeze({ status: "UNAVAILABLE", provider, reason: "PROVIDER_REPORTED_UNAVAILABLE", providerGenerationSha256: report.providerGenerationSha256, healthReportSha256: report.reportSha256 }));
+    } else {
+      eligible.push({ provider, report });
+    }
+  }
+  for (const report of reports) {
+    if (!matchedReports.has(report.reportSha256)) throw new Error(`provider health report has no current enabled host-bound provider: ${report.moduleId}/${report.adapterId}`);
+  }
+  const selections = Object.freeze([...(input.selections ?? [])].map(normalizeSelection).sort((a, b) => bindingKey(a.capabilityId, a.toolName).localeCompare(bindingKey(b.capabilityId, b.toolName))));
+  const selectionByKey = new Map<string, CapabilityProviderSelection>();
+  for (const selection of selections) {
+    const key = bindingKey(selection.capabilityId, selection.toolName);
+    if (selectionByKey.has(key)) throw new TypeError(`duplicate provider selection: ${selection.capabilityId}/${selection.toolName}`);
+    selectionByKey.set(key, selection);
+  }
+  const eligibleByKey = new Map<string, typeof eligible>();
+  for (const candidate of eligible) {
+    const key = bindingKey(candidate.provider.capabilityId, candidate.provider.toolName);
+    const group = eligibleByKey.get(key) ?? [];
+    group.push(candidate);
+    eligibleByKey.set(key, group);
+  }
+  const consumedSelections = new Set<string>();
+  const providers: CapabilityProviderAvailabilityBinding[] = [];
+  for (const [key, group] of [...eligibleByKey.entries()].sort()) {
+    const selection = selectionByKey.get(key);
+    if (group.length > 1 && !selection) throw new Error(`duplicate compatible providers require explicit selection: ${group[0]!.provider.capabilityId}/${group[0]!.provider.toolName}`);
+    const selected = selection ? group.find((candidate) => selectionMatchesBinding(selection, candidate.provider)) : group[0];
+    if (!selected) throw new Error(`provider selection is unavailable, stale, or mismatched: ${selection!.capabilityId}/${selection!.toolName}`);
+    if (selection) consumedSelections.add(key);
+    const authority = resolveCapabilityAuthority(selected.provider.capabilityId, installedCapabilityManifest, input.policyLayers ?? []);
+    const availableStatus = selected.report.status;
+    if (availableStatus === "UNAVAILABLE") throw new Error("unavailable provider entered eligible provider set");
+    providers.push(Object.freeze({
+      schemaVersion: "toadaid.capability-provider-availability-binding.v1",
+      status: availableStatus,
+      provider: selected.provider,
+      host,
+      providerGenerationSha256: selected.report.providerGenerationSha256,
+      healthReportSha256: selected.report.reportSha256,
+      authority,
+    }));
+  }
+  for (const [key, selection] of selectionByKey) {
+    if (!consumedSelections.has(key)) throw new Error(`provider selection has no available compatible candidate: ${selection.capabilityId}/${selection.toolName}`);
+  }
+  const availableIds = new Set(providers.map((item) => item.provider.capabilityId));
+  const authorizedIds = new Set(providers.filter((item) => item.authority.decision === "ALLOW").map((item) => item.provider.capabilityId));
+  const availableCapabilityManifest = mergeCapabilityDefinitions([enabledCapabilityManifest.capabilities.filter((item) => availableIds.has(item.id))]);
+  const authorizedCapabilityManifest = mergeCapabilityDefinitions([availableCapabilityManifest.capabilities.filter((item) => authorizedIds.has(item.id))]);
+  const core = Object.freeze({
+    schemaVersion: "toadaid.capability-availability-projection.v1" as const,
+    checkedAt, host, knownCapabilityManifest, installedCapabilityManifest,
+    enabledCapabilityManifest, availableCapabilityManifest,
+    authorizedCapabilityManifest, selections,
+    providers: Object.freeze(providers),
+    unavailableProviders: Object.freeze(unavailableProviders),
+  });
+  return Object.freeze({ ...core, projectionSha256: sha256(core) });
+}
+
+export function assertCapabilityAvailabilityProjectionCurrent(
+  projection: CapabilityAvailabilityProjection,
+  input: ComposeCapabilityAvailabilityProjectionInput,
+): CapabilityAvailabilityProjection {
+  capabilityAvailabilityProjectionSha256(projection);
+  const current = composeCapabilityAvailabilityProjection(input);
+  if (current.projectionSha256 !== projection.projectionSha256) {
+    throw new Error("capability availability projection is stale or mismatched");
+  }
+  return current;
+}
+
+export function resolveAvailableCapabilityProvider(
+  projection: CapabilityAvailabilityProjection,
+  capabilityIdInput: string,
+  toolNameInput: string,
+  expectedKind?: CapabilityProviderAdapterKind,
+): CapabilityProviderAvailabilityBinding {
+  capabilityAvailabilityProjectionSha256(projection);
+  const capabilityId = boundedId(capabilityIdInput, "capabilityId");
+  const toolName = boundedId(toolNameInput, "toolName");
+  const binding = projection.providers.find((item) => item.provider.capabilityId === capabilityId && item.provider.toolName === toolName);
+  if (!binding) throw new Error(`no available selected provider: ${capabilityId}/${toolName}`);
+  if (expectedKind && binding.provider.adapterKind !== expectedKind) throw new Error(`available provider kind mismatch: expected ${expectedKind}, received ${binding.provider.adapterKind}`);
+  return binding;
+}
+
+export function composeAvailableCapabilityRuntimeProviderRegistry(
+  projection: CapabilityAvailabilityProjection,
+  candidates: readonly CapabilityRuntimeProviderCandidate[],
+): CapabilityAvailableRuntimeProviderRegistry {
+  capabilityAvailabilityProjectionSha256(projection);
+  const candidateByIdentity = new Map<string, CapabilityRuntimeProviderCandidate>();
+  for (const candidate of candidates) {
+    const moduleId = boundedId(candidate.moduleId, "runtimeProvider.moduleId");
+    const identity = `${moduleId}\u0000${candidate.provider.registration.adapterId}`;
+    if (candidateByIdentity.has(identity)) throw new TypeError(`duplicate runtime provider candidate: ${moduleId}/${candidate.provider.registration.adapterId}`);
+    candidateByIdentity.set(identity, candidate);
+  }
+  const providers = projection.providers.map((available) => {
+    const selected = available.provider;
+    const identity = `${selected.moduleId}\u0000${selected.adapterId}`;
+    const candidate = candidateByIdentity.get(identity);
+    if (!candidate || adapterKind(candidate.provider.registration) !== selected.adapterKind || adapterRegistrationSha256(candidate.provider.registration) !== selected.adapterRegistrationSha256) {
+      throw new Error(`available runtime provider is missing or drifted: ${selected.moduleId}/${selected.adapterId}`);
+    }
+    candidateByIdentity.delete(identity);
+    return Object.freeze({ moduleId: selected.moduleId, adapterId: selected.adapterId, providerGenerationSha256: available.providerGenerationSha256, provider: candidate.provider });
+  });
+  if (candidateByIdentity.size > 0) throw new Error("runtime provider candidate is not selected and available");
+  return Object.freeze({
+    schemaVersion: "toadaid.capability-available-runtime-provider-registry.v1",
+    availabilityProjectionSha256: projection.projectionSha256,
+    providers: Object.freeze(providers),
+  });
+}
+
+export function resolveAvailableCapabilityRuntimeProvider<Kind extends CapabilityProviderAdapterKind>(
+  runtimeRegistry: CapabilityAvailableRuntimeProviderRegistry,
+  projection: CapabilityAvailabilityProjection,
+  capabilityId: string,
+  toolName: string,
+  expectedKind: Kind,
+): CapabilityRuntimeProviderForKind<Kind> {
+  if (runtimeRegistry.schemaVersion !== "toadaid.capability-available-runtime-provider-registry.v1" || runtimeRegistry.availabilityProjectionSha256 !== capabilityAvailabilityProjectionSha256(projection)) {
+    throw new Error("available runtime provider registry projection mismatch");
+  }
+  const available = resolveAvailableCapabilityProvider(projection, capabilityId, toolName, expectedKind);
+  const binding = runtimeRegistry.providers.find((item) => item.moduleId === available.provider.moduleId && item.adapterId === available.provider.adapterId);
+  if (!binding || binding.providerGenerationSha256 !== available.providerGenerationSha256 || adapterRegistrationSha256(binding.provider.registration) !== available.provider.adapterRegistrationSha256) {
+    throw new Error("available runtime provider binding is stale or drifted");
   }
   return binding.provider as CapabilityRuntimeProviderForKind<Kind>;
 }
