@@ -6,9 +6,9 @@ export interface CapabilityContractVersion {
   readonly minor: number;
 }
 
-export interface CapabilityContractImplementation {
-  readonly implementationId: string;
-  readonly fingerprintSha256: string;
+export interface CapabilityContractSchemaBinding {
+  readonly schemaId: string;
+  readonly schemaSha256: string;
 }
 
 export interface CapabilityContractDeprecation {
@@ -17,15 +17,59 @@ export interface CapabilityContractDeprecation {
 }
 
 export interface CapabilityContractDescriptor {
-  readonly schemaVersion: "toadaid.capability-contract.v1";
+  readonly schemaVersion: "toadaid.capability-contract.v2";
   readonly capabilityId: string;
   readonly contractId: string;
   readonly version: CapabilityContractVersion;
   readonly features: readonly string[];
-  readonly requestSchemaId: string;
-  readonly receiptSchemaId: string;
-  readonly implementation: CapabilityContractImplementation;
+  readonly requestSchema: CapabilityContractSchemaBinding;
+  readonly resultSchema: CapabilityContractSchemaBinding;
+  readonly receiptSchema: CapabilityContractSchemaBinding;
   readonly deprecation?: CapabilityContractDeprecation;
+}
+
+export type CapabilityImplementationAdapterKind =
+  | "CONNECTOR"
+  | "DESKTOP_OBSERVATION"
+  | "DESKTOP_INTERACTION"
+  | "HOST_SERVICE";
+
+export interface CapabilityProviderPlatformRequirements {
+  readonly operatingSystems: readonly string[];
+  readonly architectures: readonly string[];
+  readonly runtimeIds: readonly string[];
+}
+
+export interface CapabilityProviderImplementationDescriptor {
+  readonly schemaVersion: "toadaid.capability-provider-implementation.v1";
+  readonly moduleId: string;
+  readonly providerId: string;
+  readonly adapterKind: CapabilityImplementationAdapterKind;
+  readonly adapterId: string;
+  readonly capabilityId: string;
+  readonly contractId: string;
+  readonly contractVersion: CapabilityContractVersion;
+  readonly contractDescriptorSha256: string;
+  readonly supportedFeatures: readonly string[];
+  readonly platformRequirements: CapabilityProviderPlatformRequirements;
+  readonly adapterRegistrationSha256: string;
+  readonly implementationFingerprintSha256: string;
+  readonly providerDescriptorSha256: string;
+}
+
+export interface CreateCapabilityProviderImplementationDescriptorInput {
+  readonly moduleId: string;
+  readonly providerId: string;
+  readonly adapterKind: CapabilityImplementationAdapterKind;
+  readonly adapterId: string;
+  readonly capabilityId: string;
+  readonly contractId: string;
+  readonly contractVersion: CapabilityContractVersion;
+  readonly contractDescriptorSha256: string;
+  readonly supportedFeatures: readonly string[];
+  readonly platformRequirements?: Partial<CapabilityProviderPlatformRequirements>;
+  readonly adapterRegistrationSha256: string;
+  readonly implementationFingerprintSha256: string;
 }
 
 export interface CapabilityContractRegistry {
@@ -61,7 +105,9 @@ export interface CapabilityContractCompatibilityReceipt {
   readonly registrySha256: string;
   readonly version: CapabilityContractVersion;
   readonly features: readonly string[];
-  readonly implementationFingerprintSha256: string;
+  readonly requestSchemaSha256: string;
+  readonly resultSchemaSha256: string;
+  readonly receiptSchemaSha256: string;
   readonly compatible: true;
   readonly reason: "COMPATIBLE";
 }
@@ -111,7 +157,16 @@ export interface CapabilityInvocationContractBinding {
   readonly descriptorSha256: string;
   readonly contractId: string;
   readonly version: CapabilityContractVersion;
+  readonly providerDescriptorSha256: string;
+  readonly adapterRegistrationSha256: string;
+  readonly implementationFingerprintSha256: string;
   readonly bindingSha256: string;
+}
+
+export interface CapabilityInvocationProviderBinding {
+  readonly providerDescriptorSha256: string;
+  readonly adapterRegistrationSha256: string;
+  readonly implementationFingerprintSha256: string;
 }
 
 export interface CapabilityInvocationContractReadyReceipt {
@@ -119,6 +174,7 @@ export interface CapabilityInvocationContractReadyReceipt {
   readonly invocationId: string;
   readonly capabilityId: string;
   readonly bindingSha256: string;
+  readonly provider: CapabilityInvocationProviderBinding;
   readonly compatibility: CapabilityContractCompatibilityReceipt;
 }
 

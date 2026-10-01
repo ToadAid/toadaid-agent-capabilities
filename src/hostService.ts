@@ -656,8 +656,9 @@ function assertC1H1(
     ready.bindingSha256 !== binding.bindingSha256 ||
     ready.compatibility.requirementSha256 !== compatibility.requirementSha256 ||
     ready.compatibility.descriptorSha256 !== compatibility.descriptorSha256 ||
-    ready.compatibility.implementationFingerprintSha256 !==
-      compatibility.implementationFingerprintSha256
+    ready.provider.providerDescriptorSha256 !== binding.providerDescriptorSha256 ||
+    ready.provider.adapterRegistrationSha256 !== binding.adapterRegistrationSha256 ||
+    ready.provider.implementationFingerprintSha256 !== binding.implementationFingerprintSha256
   ) {
     throw new Error("host service contract-ready receipt is stale or mismatched");
   }
@@ -667,8 +668,9 @@ function assertC1H1(
     registration.toolName !== normalized.toolName ||
     registration.contractId !== compatibility.contractId ||
     registration.descriptorSha256 !== compatibility.descriptorSha256 ||
+    hostServiceAdapterRegistrationSha256(registration) !== binding.adapterRegistrationSha256 ||
     registration.implementationFingerprintSha256 !==
-      compatibility.implementationFingerprintSha256
+      binding.implementationFingerprintSha256
   ) {
     throw new Error(
       "host service adapter registration does not match current C1 truth",

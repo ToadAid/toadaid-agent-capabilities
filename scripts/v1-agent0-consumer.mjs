@@ -85,17 +85,14 @@ function zeroBudget() {
 }
 
 const hostProviderDescriptor = {
-  schemaVersion: "toadaid.capability-contract.v1",
+  schemaVersion: "toadaid.capability-contract.v2",
   capabilityId: "host:notification",
   contractId: HOST_SERVICE_CONTRACT_IDS["host:notification"],
   version: { major: 1, minor: 0 },
   features: [],
-  requestSchemaId: "toadaid.host.notification.request.v1",
-  receiptSchemaId: "toadaid.host.notification.receipt.v1",
-  implementation: {
-    implementationId: "v1-specialized-host-notification",
-    fingerprintSha256: sha("v1-specialized-host-notification"),
-  },
+  requestSchema: { schemaId: "toadaid.host.notification.request.v1", schemaSha256: sha("host-notification-request-schema") },
+  resultSchema: { schemaId: "toadaid.host.notification.result.v1", schemaSha256: sha("host-notification-result-schema") },
+  receiptSchema: { schemaId: "toadaid.host.notification.receipt.v1", schemaSha256: sha("host-notification-receipt-schema") },
 };
 const hostProviderRegistration = {
   schemaVersion: "toadaid.host-service-adapter-registration.v1",
@@ -105,7 +102,7 @@ const hostProviderRegistration = {
   contractId: hostProviderDescriptor.contractId,
   descriptorSha256: capabilityContractDescriptorSha256(hostProviderDescriptor),
   implementationFingerprintSha256:
-    hostProviderDescriptor.implementation.fingerprintSha256,
+    sha("v1-specialized-host-notification"),
 };
 const specializedHostProvider = {
   registration: hostProviderRegistration,
@@ -202,17 +199,14 @@ const rootRun = createRunStateCapsule({
 });
 
 const browserDescriptor = {
-  schemaVersion: "toadaid.capability-contract.v1",
+  schemaVersion: "toadaid.capability-contract.v2",
   capabilityId: "browser:evidence",
   contractId: "toadaid.browser-evidence.v1",
   version: { major: 1, minor: 0 },
   features: ["evidence.capture"],
-  requestSchemaId: "toadaid.browser-evidence.request.v1",
-  receiptSchemaId: "toadaid.browser-evidence.receipt.v1",
-  implementation: {
-    implementationId: "v1-agent0-browser-evidence",
-    fingerprintSha256: sha("v1-browser-evidence-implementation"),
-  },
+  requestSchema: { schemaId: "toadaid.browser-evidence.request.v1", schemaSha256: sha("browser-evidence-request-schema") },
+  resultSchema: { schemaId: "toadaid.browser-evidence.result.v1", schemaSha256: sha("browser-evidence-result-schema") },
+  receiptSchema: { schemaId: "toadaid.browser-evidence.receipt.v1", schemaSha256: sha("browser-evidence-receipt-schema") },
 };
 const browserRequirement = {
   capabilityId: "browser:evidence",
@@ -311,8 +305,13 @@ let invocation = createCapabilityInvocation({
 });
 invocation = authorizeCapabilityInvocation(invocation, { manifest: CORE_CAPABILITY_MANIFEST, policyLayers }, { now: () => new Date(t(4)) });
 assert.equal(invocation.record.status, "AUTHORIZED");
-const contractBinding = createCapabilityInvocationContractBinding(invocation, browserRequirement, registry);
-const contractReady = assertCapabilityInvocationContractReady(contractBinding, invocation, browserRequirement, registry);
+const browserProviderBinding = {
+  providerDescriptorSha256: sha("v1-browser-provider-descriptor"),
+  adapterRegistrationSha256: sha("v1-browser-adapter-registration"),
+  implementationFingerprintSha256: sha("v1-browser-evidence-implementation"),
+};
+const contractBinding = createCapabilityInvocationContractBinding(invocation, browserRequirement, registry, browserProviderBinding);
+const contractReady = assertCapabilityInvocationContractReady(contractBinding, invocation, browserRequirement, registry, browserProviderBinding);
 assert.equal(contractReady.compatibility.compatible, true);
 const readFence = createReplayFence(invocation, { replayClass: "SAFE_READ", createdAt: t(4) });
 invocation = startCapabilityInvocation(invocation, "v1-runtime", { manifest: CORE_CAPABILITY_MANIFEST, policyLayers }, { now: () => new Date(t(5)) });

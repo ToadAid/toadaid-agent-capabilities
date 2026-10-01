@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   capabilityContractDescriptorSha256,
+  createCapabilityProviderImplementationDescriptor,
 } from "../src/capabilityContract.js";
 import {
   resolveCapabilityAuthority,
@@ -32,21 +33,16 @@ const RESOURCE_V1 = "c".repeat(64);
 const RESOURCE_V2 = "d".repeat(64);
 const INSPECTION_SHA = "e".repeat(64);
 
-function descriptor(
-  implementationFingerprintSha256 = IMPLEMENTATION_V1,
-): CapabilityContractDescriptor {
+function descriptor(): CapabilityContractDescriptor {
   return {
-    schemaVersion: "toadaid.capability-contract.v1",
+    schemaVersion: "toadaid.capability-contract.v2",
     capabilityId: "connector:lookup",
     contractId: "toadaid.connector.lookup",
     version: { major: 1, minor: 0 },
     features: ["lookup.read"],
-    requestSchemaId: "toadaid.connector.lookup.request.v1",
-    receiptSchemaId: "toadaid.connector.lookup.receipt.v1",
-    implementation: {
-      implementationId: "fixture-lookup-adapter",
-      fingerprintSha256: implementationFingerprintSha256,
-    },
+    requestSchema: { schemaId: "toadaid.connector.lookup.request.v1", schemaSha256: "1".repeat(64) },
+    resultSchema: { schemaId: "toadaid.connector.lookup.result.v1", schemaSha256: "2".repeat(64) },
+    receiptSchema: { schemaId: "toadaid.connector.lookup.receipt.v1", schemaSha256: "3".repeat(64) },
   };
 }
 
@@ -55,7 +51,7 @@ function moduleManifest(
   implementationFingerprintSha256 = IMPLEMENTATION_V1,
   resourceFingerprintSha256 = RESOURCE_V1,
 ) {
-  const contract = descriptor(implementationFingerprintSha256);
+  const contract = descriptor();
   return createCapabilityModuleManifest({
     moduleId: "fixture.lookup-module",
     version,
@@ -164,6 +160,57 @@ test("P14 binds P12 adapter identity to exact C1 descriptor", () => {
       ],
     }),
     /does not match C1 descriptor/,
+  );
+});
+
+test("C1B module manifest seals separate provider identity and platform requirements", () => {
+  const contract = descriptor();
+  const manifest = createCapabilityModuleManifest({
+    moduleId: "fixture.lookup-module",
+    version: "1.0.0",
+    capabilities: [{ id: "connector:lookup", description: "Fixture lookup connector.", defaultDecision: "BLOCK" }],
+    contractDescriptors: [contract],
+    adapters: [{
+      schemaVersion: "toadaid.connector-adapter-registration.v1",
+      adapterId: "fixture-lookup-adapter",
+      capabilityId: "connector:lookup",
+      toolName: "lookup",
+      contractId: contract.contractId,
+      descriptorSha256: capabilityContractDescriptorSha256(contract),
+      implementationFingerprintSha256: IMPLEMENTATION_V1,
+    }],
+    providerPlatformRequirements: [{
+      adapterId: "fixture-lookup-adapter",
+      requirements: { operatingSystems: ["Linux"], architectures: ["X64"], runtimeIds: ["Node-24"] },
+    }],
+  });
+  const provider = manifest.providerImplementations[0]!;
+  assert.equal(provider.contractDescriptorSha256, capabilityContractDescriptorSha256(contract));
+  assert.equal(provider.implementationFingerprintSha256, IMPLEMENTATION_V1);
+  assert.deepEqual(provider.platformRequirements, {
+    operatingSystems: ["linux"],
+    architectures: ["x64"],
+    runtimeIds: ["node-24"],
+  });
+  const installed = installCapabilityModule(manifest, {
+    installedAt: "2026-09-26T05:50:00.000Z",
+  });
+  const substitutedProvider = createCapabilityProviderImplementationDescriptor({
+    ...provider,
+    providerId: "substituted/provider",
+  });
+  assert.throws(
+    () => validateCapabilityModuleLifecycleEnvelope({
+      ...installed,
+      record: {
+        ...installed.record,
+        manifest: {
+          ...manifest,
+          providerImplementations: [substitutedProvider],
+        },
+      },
+    }),
+    /provider implementation mismatch/,
   );
 });
 
@@ -343,6 +390,14 @@ test("P14 clean update produces predecessor-bound disabled lifecycle state", () 
   assert.equal(updated.record.transition, "UPDATE");
   assert.equal(updated.record.manifest.version, "1.1.0");
   assert.equal(updated.record.inspectionEvidenceRefs.length, 1);
+  assert.equal(
+    updated.record.manifest.contractRegistry.descriptors[0] && capabilityContractDescriptorSha256(updated.record.manifest.contractRegistry.descriptors[0]),
+    capabilityContractDescriptorSha256(installed.record.manifest.contractRegistry.descriptors[0]!),
+  );
+  assert.notEqual(
+    updated.record.manifest.providerImplementations[0]?.providerDescriptorSha256,
+    installed.record.manifest.providerImplementations[0]?.providerDescriptorSha256,
+  );
   assert.doesNotThrow(
     () => assertCapabilityModulePredecessor(installed, updated),
   );

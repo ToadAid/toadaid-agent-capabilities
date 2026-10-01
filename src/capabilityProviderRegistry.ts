@@ -126,11 +126,20 @@ function bindingFromProjection(
     );
   }
   const descriptorSha256 = capabilityContractDescriptorSha256(descriptor);
+  const providerImplementation = projection.providerImplementations.find(
+    (item) => item.adapterId === registration.adapterId,
+  );
+  if (!providerImplementation) {
+    throw new Error(`provider implementation descriptor is missing: ${registration.adapterId}`);
+  }
   if (
     registration.contractId !== descriptor.contractId ||
     registration.descriptorSha256 !== descriptorSha256 ||
     registration.implementationFingerprintSha256 !==
-      descriptor.implementation.fingerprintSha256
+      providerImplementation.implementationFingerprintSha256 ||
+    providerImplementation.contractDescriptorSha256 !== descriptorSha256 ||
+    providerImplementation.adapterRegistrationSha256 !==
+      adapterRegistrationSha256(registration)
   ) {
     throw new Error(
       `provider adapter does not match module descriptor: ${registration.adapterId}`,
@@ -148,9 +157,11 @@ function bindingFromProjection(
     adapterKind: adapterKind(registration),
     adapterRegistrationSha256: adapterRegistrationSha256(registration),
     descriptorSha256,
+    providerDescriptorSha256: providerImplementation.providerDescriptorSha256,
     implementationFingerprintSha256:
       registration.implementationFingerprintSha256,
     registration,
+    providerImplementation,
   });
 }
 
@@ -167,6 +178,7 @@ function selectionFromBinding(
     lifecycleRecordSha256: binding.lifecycleRecordSha256,
     adapterRegistrationSha256: binding.adapterRegistrationSha256,
     descriptorSha256: binding.descriptorSha256,
+    providerDescriptorSha256: binding.providerDescriptorSha256,
     implementationFingerprintSha256:
       binding.implementationFingerprintSha256,
   });
@@ -203,6 +215,8 @@ function normalizeSelection(
       sha(selection.adapterRegistrationSha256, "selection.adapterRegistrationSha256")!,
     descriptorSha256:
       sha(selection.descriptorSha256, "selection.descriptorSha256")!,
+    providerDescriptorSha256:
+      sha(selection.providerDescriptorSha256, "selection.providerDescriptorSha256")!,
     implementationFingerprintSha256:
       sha(
         selection.implementationFingerprintSha256,

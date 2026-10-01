@@ -7,9 +7,12 @@ import {
   assertContractBoundRecipePlanCurrent,
   CapabilityContractCompatibilityError,
   compileGovernedRecipeWithContracts,
+  capabilityContractDescriptorSha256,
   createCapabilityContractRegistry,
   createCapabilityInvocationContractBinding,
+  createCapabilityProviderImplementationDescriptor,
   discoverCapabilityContracts,
+  validateCapabilityProviderImplementationDescriptor,
 } from "../src/capabilityContract.js";
 import type { CapabilityContractDescriptor, CapabilityContractRequirement } from "../src/capabilityContract.js";
 import type { CapabilityInvocationEnvelope, CapabilityInvocationStatus } from "../src/invocationTypes.js";
@@ -20,14 +23,14 @@ const B = "b".repeat(64);
 const C = "c".repeat(64);
 
 const descriptor = (patch: Partial<CapabilityContractDescriptor> = {}): CapabilityContractDescriptor => ({
-  schemaVersion: "toadaid.capability-contract.v1",
+  schemaVersion: "toadaid.capability-contract.v2",
   capabilityId: "browser:evidence",
   contractId: "toadaid.browser.evidence",
   version: { major: 1, minor: 3 },
   features: ["dom.bounded", "screenshot.sha256"],
-  requestSchemaId: "toadaid.browser.evidence.request.v1",
-  receiptSchemaId: "toadaid.browser.evidence.receipt.v1",
-  implementation: { implementationId: "browser-evidence", fingerprintSha256: A },
+  requestSchema: { schemaId: "toadaid.browser.evidence.request.v1", schemaSha256: A },
+  resultSchema: { schemaId: "toadaid.browser.evidence.result.v1", schemaSha256: B },
+  receiptSchema: { schemaId: "toadaid.browser.evidence.receipt.v1", schemaSha256: C },
   ...patch,
 });
 
@@ -39,6 +42,12 @@ const requirement = (patch: Partial<CapabilityContractRequirement> = {}): Capabi
   requiredFeatures: ["dom.bounded"],
   ...patch,
 });
+
+const provider = {
+  providerDescriptorSha256: A,
+  adapterRegistrationSha256: B,
+  implementationFingerprintSha256: C,
+};
 
 const recipe = (): GovernedRecipeDefinition => ({
   schemaVersion: "toadaid.governed-recipe.v1",
@@ -78,6 +87,48 @@ test("registry discovery is deterministic", () => {
   assert.equal(discoverCapabilityContracts(registry).registrySha256, registry.registrySha256);
 });
 
+test("semantic contract identity is independent from provider implementation identity", () => {
+  const semanticSha = capabilityContractDescriptorSha256(descriptor());
+  const first = createCapabilityProviderImplementationDescriptor({
+    moduleId: "fixture.browser-linux",
+    providerId: "fixture.browser-linux/evidence",
+    adapterKind: "CONNECTOR",
+    adapterId: "evidence",
+    capabilityId: "browser:evidence",
+    contractId: "toadaid.browser.evidence",
+    contractVersion: { major: 1, minor: 3 },
+    contractDescriptorSha256: semanticSha,
+    supportedFeatures: ["dom.bounded", "screenshot.sha256"],
+    platformRequirements: { operatingSystems: ["Linux"], architectures: ["X64"] },
+    adapterRegistrationSha256: A,
+    implementationFingerprintSha256: B,
+  });
+  const second = createCapabilityProviderImplementationDescriptor({
+    ...first,
+    moduleId: "fixture.browser-windows",
+    providerId: "fixture.browser-windows/evidence",
+    platformRequirements: { operatingSystems: ["Windows"], architectures: ["X64"] },
+    adapterRegistrationSha256: B,
+    implementationFingerprintSha256: C,
+  });
+  assert.equal(first.contractDescriptorSha256, semanticSha);
+  assert.equal(second.contractDescriptorSha256, semanticSha);
+  assert.notEqual(first.providerDescriptorSha256, second.providerDescriptorSha256);
+  assert.deepEqual(first.platformRequirements.operatingSystems, ["linux"]);
+  assert.throws(
+    () => validateCapabilityProviderImplementationDescriptor({ ...first, implementationFingerprintSha256: C }),
+    /integrity mismatch/,
+  );
+});
+
+test("schema identifiers without enforceable digests are refused", () => {
+  const malformed = {
+    ...descriptor(),
+    requestSchema: { schemaId: "toadaid.browser.evidence.request.v1" },
+  } as unknown as CapabilityContractDescriptor;
+  assert.throws(() => createCapabilityContractRegistry([malformed]), /requestSchema\.schemaSha256/);
+});
+
 test("exact major, minimum minor, and required features are enforced", () => {
   const registry = createCapabilityContractRegistry([descriptor()]);
   assert.equal(assertCapabilityContractCompatible(registry, requirement()).compatible, true);
@@ -99,10 +150,10 @@ test("contract-aware W1 compile binds descriptor provenance", () => {
   assert.equal(plan.basePlan.effectiveCapabilities[0], "browser:evidence");
 });
 
-test("changed implementation descriptor requires W1 recompile", () => {
+test("changed enforceable schema digest requires W1 recompile", () => {
   const first = createCapabilityContractRegistry([descriptor()]);
   const plan = compileGovernedRecipeWithContracts(recipe(), {}, options(first));
-  const changed = createCapabilityContractRegistry([descriptor({ implementation: { implementationId: "browser-evidence", fingerprintSha256: B } })]);
+  const changed = createCapabilityContractRegistry([descriptor({ resultSchema: { schemaId: "toadaid.browser.evidence.result.v1", schemaSha256: A } })]);
   assert.throws(() => assertContractBoundRecipePlanCurrent(plan, recipe(), { ...options(changed), compiledAt: "2026-09-25T04:05:00.000Z" }), /descriptor changed; recompile required/);
 });
 
@@ -115,10 +166,11 @@ test("contract-bound W1 plan still obeys P3 revocation", () => {
 
 test("H1 binding requires AUTHORIZED invocation and stable intent", () => {
   const registry = createCapabilityContractRegistry([descriptor()]);
-  const binding = createCapabilityInvocationContractBinding(invocation(), requirement(), registry);
-  assert.equal(assertCapabilityInvocationContractReady(binding, invocation(), requirement(), registry).invocationId, "inv-1");
-  assert.throws(() => assertCapabilityInvocationContractReady(binding, invocation("REQUESTED"), requirement(), registry), /must be AUTHORIZED/);
-  assert.throws(() => assertCapabilityInvocationContractReady(binding, invocation("AUTHORIZED", C), requirement(), registry), /identity\/intent/);
+  const binding = createCapabilityInvocationContractBinding(invocation(), requirement(), registry, provider);
+  assert.equal(assertCapabilityInvocationContractReady(binding, invocation(), requirement(), registry, provider).invocationId, "inv-1");
+  assert.throws(() => assertCapabilityInvocationContractReady(binding, invocation("REQUESTED"), requirement(), registry, provider), /must be AUTHORIZED/);
+  assert.throws(() => assertCapabilityInvocationContractReady(binding, invocation("AUTHORIZED", C), requirement(), registry, provider), /identity\/intent/);
+  assert.throws(() => assertCapabilityInvocationContractReady(binding, invocation(), requirement(), registry, { ...provider, implementationFingerprintSha256: A }), /provider changed; create a new binding/);
 });
 
 test("tampered registry hash is refused", () => {

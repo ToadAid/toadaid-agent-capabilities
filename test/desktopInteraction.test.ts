@@ -23,6 +23,7 @@ import {
 import {
   DESKTOP_INTERACTION_CONTRACT_IDS,
   DESKTOP_INTERACTION_TOOL_NAMES,
+  desktopInteractionAdapterRegistrationSha256,
   desktopInteractionParametersSha256,
   interactGovernedDesktop,
   normalizeDesktopInteractionRequest,
@@ -328,7 +329,7 @@ function makeContext(
 
   const descriptor = {
     schemaVersion:
-      "toadaid.capability-contract.v1" as const,
+      "toadaid.capability-contract.v2" as const,
     capabilityId,
     contractId,
     version: { major: 1, minor: 0 },
@@ -337,15 +338,18 @@ function makeContext(
       "x1-non-replayable",
       "q1-accounted",
     ],
-    requestSchemaId:
-      "toadaid.desktop.interaction-request",
-    receiptSchemaId:
-      "toadaid.desktop.interaction-receipt",
-    implementation: {
-      implementationId:
-        "windows-mcp-interaction-adapter",
-      fingerprintSha256: IMPL_SHA,
-    },
+    requestSchema: { schemaId: "toadaid.desktop.interaction-request", schemaSha256: "8".repeat(64) },
+    resultSchema: { schemaId: "toadaid.desktop.interaction-result", schemaSha256: "9".repeat(64) },
+    receiptSchema: { schemaId: "toadaid.desktop.interaction-receipt", schemaSha256: "a".repeat(64) },
+  };
+  const registration: DesktopInteractionAdapterRegistration = {
+    schemaVersion: "toadaid.desktop-interaction-adapter-registration.v1",
+    adapterId: "windows-mcp-interaction-adapter",
+    capabilityId,
+    toolName,
+    contractId,
+    descriptorSha256: capabilityContractDescriptorSha256(descriptor),
+    implementationFingerprintSha256: IMPL_SHA,
   };
   const registry =
     createCapabilityContractRegistry([descriptor]);
@@ -423,6 +427,11 @@ function makeContext(
       invocation,
       requirement,
       registry,
+      {
+        providerDescriptorSha256: "b".repeat(64),
+        adapterRegistrationSha256: desktopInteractionAdapterRegistrationSha256(registration),
+        implementationFingerprintSha256: IMPL_SHA,
+      },
     );
   const contractReady = {
     schemaVersion:
@@ -431,6 +440,11 @@ function makeContext(
     capabilityId,
     bindingSha256:
       contractBinding.bindingSha256,
+    provider: {
+      providerDescriptorSha256: contractBinding.providerDescriptorSha256,
+      adapterRegistrationSha256: contractBinding.adapterRegistrationSha256,
+      implementationFingerprintSha256: contractBinding.implementationFingerprintSha256,
+    },
     compatibility,
   };
 
@@ -447,23 +461,6 @@ function makeContext(
     policy("host:session"),
     { now: () => new Date(NOW) },
   );
-
-  const registration:
-    DesktopInteractionAdapterRegistration = {
-      schemaVersion:
-        "toadaid.desktop-interaction-adapter-registration.v1",
-      adapterId:
-        "windows-mcp-interaction-adapter",
-      capabilityId,
-      toolName,
-      contractId,
-      descriptorSha256:
-        capabilityContractDescriptorSha256(
-          descriptor,
-        ),
-      implementationFingerprintSha256:
-        IMPL_SHA,
-    };
 
   const baseAdapter: GovernedDesktopInteractionAdapter =
     {

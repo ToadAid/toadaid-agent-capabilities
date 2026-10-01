@@ -51,21 +51,16 @@ const SHA_D = "d".repeat(64);
 function descriptor(
   capabilityId: string,
   contractId: string,
-  implementationId: string,
-  implementationFingerprintSha256: string,
 ): CapabilityContractDescriptor {
   return {
-    schemaVersion: "toadaid.capability-contract.v1",
+    schemaVersion: "toadaid.capability-contract.v2",
     capabilityId,
     contractId,
     version: { major: 1, minor: 0 },
     features: [],
-    requestSchemaId: `${contractId}.request.v1`,
-    receiptSchemaId: `${contractId}.receipt.v1`,
-    implementation: {
-      implementationId,
-      fingerprintSha256: implementationFingerprintSha256,
-    },
+    requestSchema: { schemaId: `${contractId}.request.v1`, schemaSha256: "1".repeat(64) },
+    resultSchema: { schemaId: `${contractId}.result.v1`, schemaSha256: "2".repeat(64) },
+    receiptSchema: { schemaId: `${contractId}.receipt.v1`, schemaSha256: "3".repeat(64) },
   };
 }
 
@@ -81,8 +76,6 @@ function enabledModule(
   const contract = descriptor(
     capabilityId,
     contractId,
-    `${moduleId}-adapter`,
-    implementationFingerprintSha256,
   );
   const registration = {
     schemaVersion,
@@ -152,8 +145,6 @@ test("P14B composes every typed provider registration kind", () => {
     descriptor(
       item.capabilityId,
       item.contractId,
-      item.adapterId,
-      item.fingerprint,
     )
   );
   const manifest = createCapabilityModuleManifest({

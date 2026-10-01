@@ -3,19 +3,25 @@ import {
 } from "./capabilityPolicy.js";
 import {
   capabilityContractDescriptorSha256,
+  createCapabilityProviderImplementationDescriptor,
   createCapabilityContractRegistry,
   validateCapabilityContractRegistry,
+  validateCapabilityProviderImplementationDescriptor,
 } from "./capabilityContract.js";
 import {
+  connectorAdapterRegistrationSha256,
   normalizeConnectorAdapterRegistration,
 } from "./connectorAdapter.js";
 import {
+  desktopObservationAdapterRegistrationSha256,
   normalizeDesktopObservationAdapterRegistration,
 } from "./desktopObservation.js";
 import {
+  desktopInteractionAdapterRegistrationSha256,
   normalizeDesktopInteractionAdapterRegistration,
 } from "./desktopInteraction.js";
 import {
+  hostServiceAdapterRegistrationSha256,
   normalizeHostServiceAdapterRegistration,
 } from "./hostService.js";
 import {
@@ -29,6 +35,8 @@ import type {
 } from "./capabilityPolicy.js";
 import type {
   CapabilityContractDescriptor,
+  CapabilityImplementationAdapterKind,
+  CapabilityProviderImplementationDescriptor,
 } from "./capabilityContractTypes.js";
 import type {
   CapabilityModuleAdapterRegistration,
@@ -37,6 +45,7 @@ import type {
   CapabilityModuleLifecycleRecord,
   CapabilityModuleManifest,
   CapabilityModuleOwnedResource,
+  CapabilityModuleProviderPlatformDeclaration,
   CapabilityModuleRegistrationProjection,
   CapabilityModuleRuntime,
   CapabilityModuleState,
@@ -174,6 +183,72 @@ export function normalizeCapabilityModuleAdapterRegistration(
   }
 }
 
+function moduleAdapterKind(
+  adapter: CapabilityModuleAdapterRegistration,
+): CapabilityImplementationAdapterKind {
+  switch (adapter.schemaVersion) {
+    case "toadaid.connector-adapter-registration.v1": return "CONNECTOR";
+    case "toadaid.desktop-observation-adapter-registration.v1": return "DESKTOP_OBSERVATION";
+    case "toadaid.desktop-interaction-adapter-registration.v1": return "DESKTOP_INTERACTION";
+    case "toadaid.host-service-adapter-registration.v1": return "HOST_SERVICE";
+  }
+}
+
+function moduleAdapterRegistrationSha256(
+  adapter: CapabilityModuleAdapterRegistration,
+): string {
+  switch (adapter.schemaVersion) {
+    case "toadaid.connector-adapter-registration.v1": return connectorAdapterRegistrationSha256(adapter);
+    case "toadaid.desktop-observation-adapter-registration.v1": return desktopObservationAdapterRegistrationSha256(adapter);
+    case "toadaid.desktop-interaction-adapter-registration.v1": return desktopInteractionAdapterRegistrationSha256(adapter);
+    case "toadaid.host-service-adapter-registration.v1": return hostServiceAdapterRegistrationSha256(adapter);
+  }
+}
+
+function createModuleProviderImplementations(
+  moduleId: string,
+  adapters: readonly CapabilityModuleAdapterRegistration[],
+  descriptors: readonly CapabilityContractDescriptor[],
+  declarations: readonly CapabilityModuleProviderPlatformDeclaration[] | undefined,
+): readonly CapabilityProviderImplementationDescriptor[] {
+  const requirementsByAdapter = new Map<string, CapabilityModuleProviderPlatformDeclaration["requirements"]>();
+  for (const declaration of declarations ?? []) {
+    const adapterId = boundedId(declaration.adapterId, "providerPlatformRequirements.adapterId");
+    if (requirementsByAdapter.has(adapterId)) {
+      throw new TypeError(`duplicate provider platform declaration: ${adapterId}`);
+    }
+    requirementsByAdapter.set(adapterId, declaration.requirements);
+  }
+  const descriptorByCapability = new Map(
+    descriptors.map((descriptor) => [descriptor.capabilityId, descriptor]),
+  );
+  const providers = adapters.map((adapter) => {
+    const descriptor = descriptorByCapability.get(adapter.capabilityId);
+    if (!descriptor) throw new Error(`module adapter has no C1 descriptor: ${adapter.capabilityId}`);
+    const requirements = requirementsByAdapter.get(adapter.adapterId);
+    requirementsByAdapter.delete(adapter.adapterId);
+    return createCapabilityProviderImplementationDescriptor({
+      moduleId,
+      providerId: `${moduleId}/${adapter.adapterId}`,
+      adapterKind: moduleAdapterKind(adapter),
+      adapterId: adapter.adapterId,
+      capabilityId: adapter.capabilityId,
+      contractId: adapter.contractId,
+      contractVersion: descriptor.version,
+      contractDescriptorSha256: capabilityContractDescriptorSha256(descriptor),
+      supportedFeatures: descriptor.features,
+      ...(requirements ? { platformRequirements: requirements } : {}),
+      adapterRegistrationSha256: moduleAdapterRegistrationSha256(adapter),
+      implementationFingerprintSha256: adapter.implementationFingerprintSha256,
+    });
+  });
+  if (requirementsByAdapter.size > 0) {
+    throw new Error(`provider platform declaration references unknown adapter: ${requirementsByAdapter.keys().next().value}`);
+  }
+  providers.sort((a, b) => a.providerId.localeCompare(b.providerId));
+  return Object.freeze(providers);
+}
+
 function normalizeAdapters(
   adapters: readonly CapabilityModuleAdapterRegistration[] | undefined,
 ): readonly CapabilityModuleAdapterRegistration[] {
@@ -232,9 +307,7 @@ function assertModuleCrossBindings(
     if (
       adapter.contractId !== descriptor.contractId ||
       adapter.descriptorSha256 !==
-        capabilityContractDescriptorSha256(descriptor) ||
-      adapter.implementationFingerprintSha256 !==
-        descriptor.implementation.fingerprintSha256
+        capabilityContractDescriptorSha256(descriptor)
     ) {
       throw new Error(
         `module adapter does not match C1 descriptor: ${adapter.adapterId}`,
@@ -249,6 +322,7 @@ function capabilityModuleManifestCore(
   capabilities: readonly CapabilityDefinition[],
   contractDescriptors: readonly CapabilityContractDescriptor[],
   adapters: readonly CapabilityModuleAdapterRegistration[],
+  providerPlatformRequirements: readonly CapabilityModuleProviderPlatformDeclaration[] | undefined,
   ownedResources: readonly CapabilityModuleOwnedResource[],
 ): Omit<CapabilityModuleManifest, "manifestSha256"> {
   const normalizedCapabilities = normalizeCapabilityDefinitions(capabilities);
@@ -259,6 +333,13 @@ function capabilityModuleManifestCore(
     ),
   );
   const normalizedAdapters = normalizeAdapters(adapters);
+  const moduleIdNormalized = boundedId(moduleId, "moduleId");
+  const providerImplementations = createModuleProviderImplementations(
+    moduleIdNormalized,
+    normalizedAdapters,
+    contractRegistry.descriptors,
+    providerPlatformRequirements,
+  );
   const normalizedResources = normalizeOwnedResources(ownedResources);
 
   assertModuleCrossBindings(
@@ -269,11 +350,12 @@ function capabilityModuleManifestCore(
 
   return Object.freeze({
     schemaVersion: "toadaid.capability-module-manifest.v1" as const,
-    moduleId: boundedId(moduleId, "moduleId"),
+    moduleId: moduleIdNormalized,
     version: normalizeModuleVersion(version),
     capabilityManifest,
     contractRegistry,
     adapters: normalizedAdapters,
+    providerImplementations,
     ownedResources: normalizedResources,
   });
 }
@@ -287,6 +369,7 @@ export function createCapabilityModuleManifest(
     input.capabilities,
     input.contractDescriptors ?? [],
     input.adapters ?? [],
+    input.providerPlatformRequirements,
     input.ownedResources ?? [],
   );
   return Object.freeze({
@@ -308,14 +391,24 @@ export function validateCapabilityModuleManifest(
   }
 
   const registry = validateCapabilityContractRegistry(input.contractRegistry);
+  const providerImplementations = input.providerImplementations.map(
+    validateCapabilityProviderImplementationDescriptor,
+  );
   const core = capabilityModuleManifestCore(
     input.moduleId,
     input.version,
     input.capabilityManifest.capabilities,
     registry.descriptors,
     input.adapters,
+    providerImplementations.map((provider) => ({
+      adapterId: provider.adapterId,
+      requirements: provider.platformRequirements,
+    })),
     input.ownedResources,
   );
+  if (sha256(providerImplementations) !== sha256(core.providerImplementations)) {
+    throw new Error("capability module provider implementation mismatch");
+  }
   const digest = sha(input.manifestSha256, "manifestSha256")!;
   if (digest !== sha256(core)) {
     throw new Error("capability module manifest integrity mismatch");
@@ -805,6 +898,7 @@ export function projectEnabledCapabilityModule(
     capabilityManifest: current.record.manifest.capabilityManifest,
     contractRegistry: current.record.manifest.contractRegistry,
     adapters: current.record.manifest.adapters,
+    providerImplementations: current.record.manifest.providerImplementations,
   });
 }
 

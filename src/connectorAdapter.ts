@@ -168,8 +168,9 @@ function assertGovernedBinding(
     ready.bindingSha256 !== binding.bindingSha256 ||
     ready.compatibility.requirementSha256 !== compatibility.requirementSha256 ||
     ready.compatibility.descriptorSha256 !== compatibility.descriptorSha256 ||
-    ready.compatibility.implementationFingerprintSha256 !==
-      compatibility.implementationFingerprintSha256
+    ready.provider.providerDescriptorSha256 !== binding.providerDescriptorSha256 ||
+    ready.provider.adapterRegistrationSha256 !== binding.adapterRegistrationSha256 ||
+    ready.provider.implementationFingerprintSha256 !== binding.implementationFingerprintSha256
   ) {
     throw new Error("connector contract-ready receipt is stale or does not match current C1 truth");
   }
@@ -190,11 +191,14 @@ function assertGovernedBinding(
 
   if (
     registration.implementationFingerprintSha256 !==
-    compatibility.implementationFingerprintSha256
+    binding.implementationFingerprintSha256
   ) {
     throw new Error(
       "connector implementation fingerprint changed or does not match current C1 truth",
     );
+  }
+  if (connectorAdapterRegistrationSha256(registration) !== binding.adapterRegistrationSha256) {
+    throw new Error("connector adapter registration changed; create a new binding");
   }
 }
 

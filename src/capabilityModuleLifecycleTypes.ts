@@ -5,6 +5,8 @@ import type {
 import type {
   CapabilityContractDescriptor,
   CapabilityContractRegistry,
+  CapabilityProviderImplementationDescriptor,
+  CapabilityProviderPlatformRequirements,
 } from "./capabilityContractTypes.js";
 import type {
   ConnectorAdapterRegistration,
@@ -35,12 +37,18 @@ export interface CapabilityModuleInspectionEvidenceRef {
   readonly sha256: string;
 }
 
+export interface CapabilityModuleProviderPlatformDeclaration {
+  readonly adapterId: string;
+  readonly requirements: Partial<CapabilityProviderPlatformRequirements>;
+}
+
 export interface CreateCapabilityModuleManifestInput {
   readonly moduleId: string;
   readonly version: string;
   readonly capabilities: readonly CapabilityDefinition[];
   readonly contractDescriptors?: readonly CapabilityContractDescriptor[];
   readonly adapters?: readonly CapabilityModuleAdapterRegistration[];
+  readonly providerPlatformRequirements?: readonly CapabilityModuleProviderPlatformDeclaration[];
   readonly ownedResources?: readonly CapabilityModuleOwnedResource[];
 }
 
@@ -51,6 +59,7 @@ export interface CapabilityModuleManifest {
   readonly capabilityManifest: CapabilityManifest;
   readonly contractRegistry: CapabilityContractRegistry;
   readonly adapters: readonly CapabilityModuleAdapterRegistration[];
+  readonly providerImplementations: readonly CapabilityProviderImplementationDescriptor[];
   readonly ownedResources: readonly CapabilityModuleOwnedResource[];
   readonly manifestSha256: string;
 }
@@ -119,4 +128,5 @@ export interface CapabilityModuleRegistrationProjection {
   readonly capabilityManifest: CapabilityManifest;
   readonly contractRegistry: CapabilityContractRegistry;
   readonly adapters: readonly CapabilityModuleAdapterRegistration[];
+  readonly providerImplementations: readonly CapabilityProviderImplementationDescriptor[];
 }

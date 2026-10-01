@@ -144,14 +144,14 @@ Checkbox law: mark an item complete only when the implementation is landed on ca
   - operation-specific availability fails closed only on the metrics that proposed work needs
   - budget state is accounting evidence, never capability authority
 - [x] **C1 — Capability contract + version discovery**
-  - SHA-sealed self-describing descriptor registry with capability ID, contract ID, major/minor version, schemas, feature set, and implementation fingerprint
+  - SHA-sealed self-describing descriptor registry with capability ID, contract ID, major/minor version, feature set, and enforceable request/result/receipt schema fingerprints
   - exact-major / minimum-minor / required-feature compatibility checks; unknown or incompatible installed capabilities fail closed
   - deprecation refuses by default unless the caller explicitly opts into that exact deprecated contract
   - contract-aware W1 profiles cover every required/optional recipe capability before base W1 compilation
   - truly absent optional capabilities remain explicit skips; installed optional capabilities must advertise a compatible contract
-  - compiled enabled capability bindings retain exact descriptor SHA; descriptor/implementation changes require recompile rather than silent adoption
+  - compiled enabled capability bindings retain exact semantic descriptor SHA; semantic changes require recompile rather than silent adoption
   - H1 contract binding ties capability + run + invocation + intent to the compatible descriptor and must pass while the invocation is `AUTHORIZED`
-  - discovery/implementation fingerprints are provenance and compatibility evidence only; they never grant P3 authority
+  - discovery and schema fingerprints are provenance and compatibility evidence only; they never grant P3 authority
 - [x] **X1 — Idempotency / replay fence**
   - explicit `SAFE_READ`, `IDEMPOTENT_WRITE`, or `NON_REPLAYABLE` classification before H1 start
   - deterministic idempotency key binds run + invocation + capability + intent
@@ -290,7 +290,7 @@ Checkbox law: mark an item complete only when the implementation is landed on ca
   - prove disabled, removed, stale, conflicting, or mismatched provider registrations cannot enter runtime dispatch
   - add a clean package-consumer proof using a fixture specialized host provider through public exports
 
-- [ ] **C1B — Contract / implementation identity separation**
+- [x] **C1B — Contract / implementation identity separation**
   - keep semantic contract identity separate from provider implementation identity so Windows/Linux/multiple compatible providers may implement one contract without pretending the contract changed
   - semantic descriptors bind capability ID, contract ID/version, feature set, and enforceable request/result/receipt schema fingerprints
   - provider implementation descriptors bind module/provider ID, adapter kind/ID, supported contract/features, platform requirements, and implementation fingerprint

@@ -32,17 +32,14 @@ const IMPLEMENTATION = "a".repeat(64);
 const INTENT = "b".repeat(64);
 
 const descriptor = (): CapabilityContractDescriptor => ({
-  schemaVersion: "toadaid.capability-contract.v1",
+  schemaVersion: "toadaid.capability-contract.v2",
   capabilityId: "connector:lookup",
   contractId: "toadaid.connector.lookup",
   version: { major: 1, minor: 0 },
   features: ["lookup.read"],
-  requestSchemaId: "toadaid.connector.lookup.request.v1",
-  receiptSchemaId: "toadaid.connector.lookup.receipt.v1",
-  implementation: {
-    implementationId: "fixture-lookup-adapter",
-    fingerprintSha256: IMPLEMENTATION,
-  },
+  requestSchema: { schemaId: "toadaid.connector.lookup.request.v1", schemaSha256: IMPLEMENTATION },
+  resultSchema: { schemaId: "toadaid.connector.lookup.result.v1", schemaSha256: INTENT },
+  receiptSchema: { schemaId: "toadaid.connector.lookup.receipt.v1", schemaSha256: "c".repeat(64) },
 });
 
 const requirement = (): CapabilityContractRequirement => ({
@@ -86,23 +83,6 @@ function setup(args: Readonly<Record<string, unknown>> = { query: "frog" }) {
     policy(),
     { now: () => new Date("2026-09-25T22:00:01.000Z") },
   );
-  const binding = createCapabilityInvocationContractBinding(
-    authorized,
-    requirement(),
-    registry,
-  );
-  const ready = assertCapabilityInvocationContractReady(
-    binding,
-    authorized,
-    requirement(),
-    registry,
-  );
-  const started = startCapabilityInvocation(
-    authorized,
-    "connector-manager",
-    policy(),
-    { now: () => new Date("2026-09-25T22:00:02.000Z") },
-  );
   const registration: ConnectorAdapterRegistration = {
     schemaVersion: "toadaid.connector-adapter-registration.v1",
     adapterId: "fixture-lookup-adapter",
@@ -112,6 +92,34 @@ function setup(args: Readonly<Record<string, unknown>> = { query: "frog" }) {
     descriptorSha256: capabilityContractDescriptorSha256(descriptor()),
     implementationFingerprintSha256: IMPLEMENTATION,
   };
+  const binding = createCapabilityInvocationContractBinding(
+    authorized,
+    requirement(),
+    registry,
+    {
+      providerDescriptorSha256: "d".repeat(64),
+      adapterRegistrationSha256: connectorAdapterRegistrationSha256(registration),
+      implementationFingerprintSha256: IMPLEMENTATION,
+    },
+  );
+  const provider = {
+    providerDescriptorSha256: "d".repeat(64),
+    adapterRegistrationSha256: connectorAdapterRegistrationSha256(registration),
+    implementationFingerprintSha256: IMPLEMENTATION,
+  };
+  const ready = assertCapabilityInvocationContractReady(
+    binding,
+    authorized,
+    requirement(),
+    registry,
+    provider,
+  );
+  const started = startCapabilityInvocation(
+    authorized,
+    "connector-manager",
+    policy(),
+    { now: () => new Date("2026-09-25T22:00:02.000Z") },
+  );
   return { args, registry, authorized, binding, ready, started, registration };
 }
 

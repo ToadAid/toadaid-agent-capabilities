@@ -657,8 +657,12 @@ function assertC1H1Binding(
       compatibility.requirementSha256 ||
     ready.compatibility.descriptorSha256 !==
       compatibility.descriptorSha256 ||
-    ready.compatibility.implementationFingerprintSha256 !==
-      compatibility.implementationFingerprintSha256
+    ready.provider.providerDescriptorSha256 !==
+      binding.providerDescriptorSha256 ||
+    ready.provider.adapterRegistrationSha256 !==
+      binding.adapterRegistrationSha256 ||
+    ready.provider.implementationFingerprintSha256 !==
+      binding.implementationFingerprintSha256
   ) {
     throw new Error(
       "desktop observation contract-ready receipt is stale or mismatched",
@@ -674,8 +678,10 @@ function assertC1H1Binding(
       compatibility.contractId ||
     registration.descriptorSha256 !==
       compatibility.descriptorSha256 ||
+    desktopObservationAdapterRegistrationSha256(registration) !==
+      binding.adapterRegistrationSha256 ||
     registration.implementationFingerprintSha256 !==
-      compatibility.implementationFingerprintSha256
+      binding.implementationFingerprintSha256
   ) {
     throw new Error(
       "desktop observation adapter registration does not match current C1 truth",

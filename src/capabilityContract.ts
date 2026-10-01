@@ -8,12 +8,14 @@ import {
   capabilityInvocationContractBindingSha256,
   contractBoundRecipePlanSha256,
   createCapabilityContractRegistry,
+  createCapabilityProviderImplementationDescriptor,
   normalizeCapabilityContractDescriptor,
   normalizeCapabilityContractRequirement,
   normalizeRecipeContractProfile,
   recipeContractProfileSha256,
   validateCapabilityContractRegistry,
   validateCapabilityInvocationContractBinding,
+  validateCapabilityProviderImplementationDescriptor,
   validateContractBoundRecipePlan,
 } from "./capabilityContractSchema.js";
 import type {
@@ -25,6 +27,7 @@ import type {
   CapabilityContractRequirement,
   CapabilityInvocationContractBinding,
   CapabilityInvocationContractReadyReceipt,
+  CapabilityInvocationProviderBinding,
   CompileGovernedRecipeWithContractsOptions,
   ContractBoundRecipeCurrentReceipt,
   ContractBoundRecipePlan,
@@ -38,12 +41,14 @@ export {
   capabilityInvocationContractBindingSha256,
   contractBoundRecipePlanSha256,
   createCapabilityContractRegistry,
+  createCapabilityProviderImplementationDescriptor,
   normalizeCapabilityContractDescriptor,
   normalizeCapabilityContractRequirement,
   normalizeRecipeContractProfile,
   recipeContractProfileSha256,
   validateCapabilityContractRegistry,
   validateCapabilityInvocationContractBinding,
+  validateCapabilityProviderImplementationDescriptor,
   validateContractBoundRecipePlan,
 } from "./capabilityContractSchema.js";
 export type * from "./capabilityContractTypes.js";
@@ -94,7 +99,9 @@ export function assertCapabilityContractCompatible(
     registrySha256: registry.registrySha256,
     version: descriptor.version,
     features: descriptor.features,
-    implementationFingerprintSha256: descriptor.implementation.fingerprintSha256,
+    requestSchemaSha256: descriptor.requestSchema.schemaSha256,
+    resultSchemaSha256: descriptor.resultSchema.schemaSha256,
+    receiptSchemaSha256: descriptor.receiptSchema.schemaSha256,
     compatible: true,
     reason: "COMPATIBLE",
   });
@@ -186,6 +193,7 @@ export function createCapabilityInvocationContractBinding(
   envelope: CapabilityInvocationEnvelope,
   requirementInput: CapabilityContractRequirement,
   registry: CapabilityContractRegistry,
+  provider: CapabilityInvocationProviderBinding,
 ): CapabilityInvocationContractBinding {
   assertInvocationShape(envelope);
   const requirement = normalizeCapabilityContractRequirement(requirementInput);
@@ -201,8 +209,14 @@ export function createCapabilityInvocationContractBinding(
     descriptorSha256: compatibility.descriptorSha256,
     contractId: compatibility.contractId,
     version: compatibility.version,
+    providerDescriptorSha256: provider.providerDescriptorSha256,
+    adapterRegistrationSha256: provider.adapterRegistrationSha256,
+    implementationFingerprintSha256: provider.implementationFingerprintSha256,
   });
-  return Object.freeze({ ...core, bindingSha256: capabilityInvocationContractBindingSha256(core) });
+  return validateCapabilityInvocationContractBinding(Object.freeze({
+    ...core,
+    bindingSha256: capabilityInvocationContractBindingSha256(core),
+  }));
 }
 
 export function assertCapabilityInvocationContractReady(
@@ -210,6 +224,7 @@ export function assertCapabilityInvocationContractReady(
   envelope: CapabilityInvocationEnvelope,
   requirementInput: CapabilityContractRequirement,
   registry: CapabilityContractRegistry,
+  provider: CapabilityInvocationProviderBinding,
 ): CapabilityInvocationContractReadyReceipt {
   const binding = validateCapabilityInvocationContractBinding(bindingInput);
   assertInvocationShape(envelope);
@@ -221,11 +236,21 @@ export function assertCapabilityInvocationContractReady(
   if (binding.requirementSha256 !== capabilityContractRequirementSha256(requirement)) throw new Error("capability invocation contract requirement changed; create a new binding");
   const compatibility = assertCapabilityContractCompatible(registry, requirement);
   if (binding.descriptorSha256 !== compatibility.descriptorSha256) throw new Error("capability invocation contract descriptor changed; create a new binding");
+  if (
+    binding.providerDescriptorSha256 !== provider.providerDescriptorSha256
+    || binding.adapterRegistrationSha256 !== provider.adapterRegistrationSha256
+    || binding.implementationFingerprintSha256 !== provider.implementationFingerprintSha256
+  ) throw new Error("capability invocation provider changed; create a new binding");
   return Object.freeze({
     schemaVersion: "toadaid.capability-invocation-contract-ready.v1",
     invocationId: binding.invocationId,
     capabilityId: binding.capabilityId,
     bindingSha256: binding.bindingSha256,
+    provider: Object.freeze({
+      providerDescriptorSha256: provider.providerDescriptorSha256,
+      adapterRegistrationSha256: provider.adapterRegistrationSha256,
+      implementationFingerprintSha256: provider.implementationFingerprintSha256,
+    }),
     compatibility,
   });
 }

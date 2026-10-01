@@ -21,6 +21,7 @@ import {
 import {
   HOST_SERVICE_CONTRACT_IDS,
   HOST_SERVICE_TOOL_NAMES,
+  hostServiceAdapterRegistrationSha256,
   hostServiceParametersSha256,
   invokeGovernedHostService,
   normalizeHostPathScope,
@@ -149,17 +150,23 @@ function context(
   const features = featureOverride ?? requiredFeatures(request);
 
   const descriptor = {
-    schemaVersion: "toadaid.capability-contract.v1" as const,
+    schemaVersion: "toadaid.capability-contract.v2" as const,
     capabilityId,
     contractId,
     version: { major: 1, minor: 0 },
     features,
-    requestSchemaId: "toadaid.host-service-request",
-    receiptSchemaId: "toadaid.host-service-receipt",
-    implementation: {
-      implementationId: "host-service-test-adapter",
-      fingerprintSha256: IMPL_SHA,
-    },
+    requestSchema: { schemaId: "toadaid.host-service-request", schemaSha256: "8".repeat(64) },
+    resultSchema: { schemaId: "toadaid.host-service-result", schemaSha256: "9".repeat(64) },
+    receiptSchema: { schemaId: "toadaid.host-service-receipt", schemaSha256: "a".repeat(64) },
+  };
+  const registration: HostServiceAdapterRegistration = {
+    schemaVersion: "toadaid.host-service-adapter-registration.v1",
+    adapterId: "host-service-test-adapter",
+    capabilityId,
+    toolName,
+    contractId,
+    descriptorSha256: capabilityContractDescriptorSha256(descriptor),
+    implementationFingerprintSha256: IMPL_SHA,
   };
   const registry = createCapabilityContractRegistry([descriptor]);
   const requirement = {
@@ -229,6 +236,11 @@ function context(
       invocation,
       requirement,
       registry,
+      {
+        providerDescriptorSha256: "b".repeat(64),
+        adapterRegistrationSha256: hostServiceAdapterRegistrationSha256(registration),
+        implementationFingerprintSha256: IMPL_SHA,
+      },
     );
   const contractReady = {
     schemaVersion:
@@ -236,6 +248,11 @@ function context(
     invocationId: invocation.record.invocationId,
     capabilityId,
     bindingSha256: binding.bindingSha256,
+    provider: {
+      providerDescriptorSha256: binding.providerDescriptorSha256,
+      adapterRegistrationSha256: binding.adapterRegistrationSha256,
+      implementationFingerprintSha256: binding.implementationFingerprintSha256,
+    },
     compatibility,
   };
 
@@ -252,17 +269,6 @@ function context(
     policy("host:session"),
     { now: () => new Date(NOW) },
   );
-
-  const registration: HostServiceAdapterRegistration = {
-    schemaVersion: "toadaid.host-service-adapter-registration.v1",
-    adapterId: "host-service-test-adapter",
-    capabilityId,
-    toolName,
-    contractId,
-    descriptorSha256:
-      capabilityContractDescriptorSha256(descriptor),
-    implementationFingerprintSha256: IMPL_SHA,
-  };
 
   const baseAdapter: GovernedHostServiceAdapter = {
     registration,

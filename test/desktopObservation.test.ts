@@ -24,6 +24,7 @@ import {
   DESKTOP_OBSERVATION_TOOL_NAMES,
   assertDesktopElementReferenceCurrent,
   assertDesktopObservationReceiptIntegrity,
+  desktopObservationAdapterRegistrationSha256,
   desktopObservationParametersSha256,
   normalizeDesktopObservationRequest,
   observeGovernedDesktop,
@@ -111,7 +112,7 @@ function makeContext(
 
   const descriptor = {
     schemaVersion:
-      "toadaid.capability-contract.v1" as const,
+      "toadaid.capability-contract.v2" as const,
     capabilityId,
     contractId,
     version: { major: 1, minor: 0 },
@@ -120,14 +121,18 @@ function makeContext(
       "lease-bound",
       "q1-accounted",
     ],
-    requestSchemaId:
-      "toadaid.desktop.observation-request",
-    receiptSchemaId:
-      "toadaid.desktop.observation-receipt",
-    implementation: {
-      implementationId: "windows-mcp-reference-adapter",
-      fingerprintSha256: IMPL_SHA,
-    },
+    requestSchema: { schemaId: "toadaid.desktop.observation-request", schemaSha256: "8".repeat(64) },
+    resultSchema: { schemaId: "toadaid.desktop.observation-result", schemaSha256: "9".repeat(64) },
+    receiptSchema: { schemaId: "toadaid.desktop.observation-receipt", schemaSha256: "a".repeat(64) },
+  };
+  const registration: DesktopObservationAdapterRegistration = {
+    schemaVersion: "toadaid.desktop-observation-adapter-registration.v1",
+    adapterId: "windows-mcp-observer",
+    capabilityId,
+    toolName,
+    contractId,
+    descriptorSha256: capabilityContractDescriptorSha256(descriptor),
+    implementationFingerprintSha256: IMPL_SHA,
   };
   const registry =
     createCapabilityContractRegistry([descriptor]);
@@ -191,6 +196,11 @@ function makeContext(
       invocation,
       requirement,
       registry,
+      {
+        providerDescriptorSha256: "b".repeat(64),
+        adapterRegistrationSha256: desktopObservationAdapterRegistrationSha256(registration),
+        implementationFingerprintSha256: IMPL_SHA,
+      },
     );
   const contractReady = {
     schemaVersion:
@@ -199,6 +209,11 @@ function makeContext(
     capabilityId,
     bindingSha256:
       contractBinding.bindingSha256,
+    provider: {
+      providerDescriptorSha256: contractBinding.providerDescriptorSha256,
+      adapterRegistrationSha256: contractBinding.adapterRegistrationSha256,
+      implementationFingerprintSha256: contractBinding.implementationFingerprintSha256,
+    },
     compatibility,
   };
 
@@ -215,22 +230,6 @@ function makeContext(
     policy("host:session"),
     { now: () => new Date(NOW) },
   );
-
-  const registration: DesktopObservationAdapterRegistration =
-    {
-      schemaVersion:
-        "toadaid.desktop-observation-adapter-registration.v1",
-      adapterId: "windows-mcp-observer",
-      capabilityId,
-      toolName,
-      contractId,
-      descriptorSha256:
-        capabilityContractDescriptorSha256(
-          descriptor,
-        ),
-      implementationFingerprintSha256:
-        IMPL_SHA,
-    };
 
   const baseAdapter: GovernedDesktopObservationAdapter = {
     registration,

@@ -93,7 +93,7 @@ export function createContractBoundIdempotencyGuarantee(
     capabilityId: capabilityId(ready.capabilityId),
     contractBindingSha256: sha(ready.bindingSha256, "contractReady.bindingSha256")!,
     contractDescriptorSha256: sha(ready.compatibility.descriptorSha256, "contractReady.descriptorSha256")!,
-    implementationFingerprintSha256: sha(ready.compatibility.implementationFingerprintSha256, "contractReady.implementationFingerprintSha256")!,
+    implementationFingerprintSha256: sha(ready.provider.implementationFingerprintSha256, "contractReady.implementationFingerprintSha256")!,
   });
   return Object.freeze({ ...core, guaranteeSha256: sha256(core) });
 }

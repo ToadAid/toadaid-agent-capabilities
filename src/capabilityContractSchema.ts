@@ -4,6 +4,8 @@ import type {
   CapabilityContractRegistry,
   CapabilityContractRequirement,
   CapabilityContractVersion,
+  CapabilityProviderImplementationDescriptor,
+  CreateCapabilityProviderImplementationDescriptorInput,
   CapabilityInvocationContractBinding,
   ContractBoundRecipePlan,
   RecipeContractProfile,
@@ -17,6 +19,7 @@ const SHA256_PATTERN = /^[0-9a-f]{64}$/;
 const MAX_DESCRIPTORS = 256;
 const MAX_FEATURES = 128;
 const MAX_REQUIREMENTS = 256;
+const PLATFORM_VALUE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 
 export function contractCanonicalJson(value: unknown): string {
   if (value === null || typeof value === "boolean" || typeof value === "number" || typeof value === "string") return JSON.stringify(value);
@@ -68,22 +71,20 @@ function normalizeFeatures(values: readonly string[] | undefined, label: string)
 }
 
 export function normalizeCapabilityContractDescriptor(input: CapabilityContractDescriptor): CapabilityContractDescriptor {
-  if (input.schemaVersion !== "toadaid.capability-contract.v1") throw new TypeError("unsupported capability contract schemaVersion");
+  if (input.schemaVersion !== "toadaid.capability-contract.v2") throw new TypeError("unsupported capability contract schemaVersion");
+  const schemaBinding = (value: CapabilityContractDescriptor["requestSchema"], label: string) => Object.freeze({
+    schemaId: contractId(value.schemaId, `${label}.schemaId`),
+    schemaSha256: sha(value.schemaSha256, `${label}.schemaSha256`),
+  });
   const normalized: CapabilityContractDescriptor = {
-    schemaVersion: "toadaid.capability-contract.v1",
+    schemaVersion: "toadaid.capability-contract.v2",
     capabilityId: capabilityId(input.capabilityId, "capabilityId"),
     contractId: contractId(input.contractId, "contractId"),
     version: boundedVersion(input.version, "version"),
     features: normalizeFeatures(input.features, "features"),
-    requestSchemaId: contractId(input.requestSchemaId, "requestSchemaId"),
-    receiptSchemaId: contractId(input.receiptSchemaId, "receiptSchemaId"),
-    implementation: Object.freeze({
-      implementationId: (() => {
-        if (!IMPLEMENTATION_ID_PATTERN.test(input.implementation.implementationId)) throw new TypeError("implementation.implementationId is invalid");
-        return input.implementation.implementationId;
-      })(),
-      fingerprintSha256: sha(input.implementation.fingerprintSha256, "implementation.fingerprintSha256"),
-    }),
+    requestSchema: schemaBinding(input.requestSchema, "requestSchema"),
+    resultSchema: schemaBinding(input.resultSchema, "resultSchema"),
+    receiptSchema: schemaBinding(input.receiptSchema, "receiptSchema"),
     ...(input.deprecation ? (() => {
       const sinceVersion = boundedVersion(input.deprecation.sinceVersion, "deprecation.sinceVersion");
       if (sinceVersion.major > input.version.major || (sinceVersion.major === input.version.major && sinceVersion.minor > input.version.minor)) throw new RangeError("deprecation.sinceVersion cannot be newer than descriptor version");
@@ -97,6 +98,75 @@ export function normalizeCapabilityContractDescriptor(input: CapabilityContractD
 
 export function capabilityContractDescriptorSha256(input: CapabilityContractDescriptor): string {
   return contractSha256(normalizeCapabilityContractDescriptor(input));
+}
+
+function normalizePlatformValues(
+  values: readonly string[] | undefined,
+  label: string,
+): readonly string[] {
+  const seen = new Set<string>();
+  const normalized = (values ?? []).map((value, index) => {
+    if (!PLATFORM_VALUE_PATTERN.test(value)) {
+      throw new TypeError(`${label}[${index}] is invalid`);
+    }
+    const canonical = value.toLowerCase();
+    if (seen.has(canonical)) throw new TypeError(`${label} contains duplicate value: ${canonical}`);
+    seen.add(canonical);
+    return canonical;
+  }).sort();
+  return Object.freeze(normalized);
+}
+
+function providerDescriptorCore(
+  input: CreateCapabilityProviderImplementationDescriptorInput,
+): Omit<CapabilityProviderImplementationDescriptor, "providerDescriptorSha256"> {
+  const kinds = ["CONNECTOR", "DESKTOP_OBSERVATION", "DESKTOP_INTERACTION", "HOST_SERVICE"] as const;
+  if (!kinds.includes(input.adapterKind)) throw new TypeError("provider adapterKind is invalid");
+  if (!IMPLEMENTATION_ID_PATTERN.test(input.moduleId)) throw new TypeError("provider moduleId is invalid");
+  if (!IMPLEMENTATION_ID_PATTERN.test(input.providerId)) throw new TypeError("providerId is invalid");
+  if (!IMPLEMENTATION_ID_PATTERN.test(input.adapterId)) throw new TypeError("provider adapterId is invalid");
+  return Object.freeze({
+    schemaVersion: "toadaid.capability-provider-implementation.v1" as const,
+    moduleId: input.moduleId,
+    providerId: input.providerId,
+    adapterKind: input.adapterKind,
+    adapterId: input.adapterId,
+    capabilityId: capabilityId(input.capabilityId, "provider.capabilityId"),
+    contractId: contractId(input.contractId, "provider.contractId"),
+    contractVersion: boundedVersion(input.contractVersion, "provider.contractVersion"),
+    contractDescriptorSha256: sha(input.contractDescriptorSha256, "provider.contractDescriptorSha256"),
+    supportedFeatures: normalizeFeatures(input.supportedFeatures, "provider.supportedFeatures"),
+    platformRequirements: Object.freeze({
+      operatingSystems: normalizePlatformValues(input.platformRequirements?.operatingSystems, "provider.platformRequirements.operatingSystems"),
+      architectures: normalizePlatformValues(input.platformRequirements?.architectures, "provider.platformRequirements.architectures"),
+      runtimeIds: normalizePlatformValues(input.platformRequirements?.runtimeIds, "provider.platformRequirements.runtimeIds"),
+    }),
+    adapterRegistrationSha256: sha(input.adapterRegistrationSha256, "provider.adapterRegistrationSha256"),
+    implementationFingerprintSha256: sha(input.implementationFingerprintSha256, "provider.implementationFingerprintSha256"),
+  });
+}
+
+export function createCapabilityProviderImplementationDescriptor(
+  input: CreateCapabilityProviderImplementationDescriptorInput,
+): CapabilityProviderImplementationDescriptor {
+  const core = providerDescriptorCore(input);
+  return Object.freeze({
+    ...core,
+    providerDescriptorSha256: contractSha256(core),
+  });
+}
+
+export function validateCapabilityProviderImplementationDescriptor(
+  input: CapabilityProviderImplementationDescriptor,
+): CapabilityProviderImplementationDescriptor {
+  if (input.schemaVersion !== "toadaid.capability-provider-implementation.v1") {
+    throw new TypeError("unsupported capability provider implementation schemaVersion");
+  }
+  const normalized = createCapabilityProviderImplementationDescriptor(input);
+  if (normalized.providerDescriptorSha256 !== input.providerDescriptorSha256) {
+    throw new Error("capability provider implementation integrity mismatch");
+  }
+  return normalized;
 }
 
 export function normalizeCapabilityContractRequirement(input: CapabilityContractRequirement): Required<CapabilityContractRequirement> {
@@ -191,6 +261,14 @@ export function capabilityInvocationContractBindingSha256(binding: Omit<Capabili
 
 export function validateCapabilityInvocationContractBinding(binding: CapabilityInvocationContractBinding): CapabilityInvocationContractBinding {
   if (binding.schemaVersion !== "toadaid.capability-invocation-contract-binding.v1") throw new TypeError("unsupported invocation contract binding schemaVersion");
+  for (const [label, value] of [
+    ["descriptorSha256", binding.descriptorSha256],
+    ["providerDescriptorSha256", binding.providerDescriptorSha256],
+    ["adapterRegistrationSha256", binding.adapterRegistrationSha256],
+    ["implementationFingerprintSha256", binding.implementationFingerprintSha256],
+  ] as const) {
+    if (!SHA256_PATTERN.test(value)) throw new TypeError(`invocation contract ${label} is invalid`);
+  }
   if (!SHA256_PATTERN.test(binding.bindingSha256) || capabilityInvocationContractBindingSha256(binding) !== binding.bindingSha256) throw new Error("capability invocation contract binding integrity mismatch");
   return binding;
 }

@@ -19,7 +19,7 @@ function inv(status:CapabilityInvocationStatus='AUTHORIZED', id='inv-1', intent=
  return {schemaVersion:'toadaid.capability-invocation-envelope.v1',record,recordSha256:digest(record)};
 }
 const rt={now:()=>new Date('2026-09-25T10:05:00.000Z'),randomId:()=> 'recon-1'};
-const ready={schemaVersion:'toadaid.capability-invocation-contract-ready.v1' as const,invocationId:'inv-1',capabilityId:'review:fix',bindingSha256:H,compatibility:{schemaVersion:'toadaid.capability-contract-compatibility.v1' as const,capabilityId:'review:fix',contractId:'toadaid.review.fix',requirementSha256:H3,descriptorSha256:H2,registrySha256:H,version:{major:1,minor:0},features:['idempotency.provider-key'],implementationFingerprintSha256:H3,compatible:true as const,reason:'COMPATIBLE' as const}};
+const ready={schemaVersion:'toadaid.capability-invocation-contract-ready.v1' as const,invocationId:'inv-1',capabilityId:'review:fix',bindingSha256:H,provider:{providerDescriptorSha256:H,adapterRegistrationSha256:H2,implementationFingerprintSha256:H3},compatibility:{schemaVersion:'toadaid.capability-contract-compatibility.v1' as const,capabilityId:'review:fix',contractId:'toadaid.review.fix',requirementSha256:H3,descriptorSha256:H2,registrySha256:H,version:{major:1,minor:0},features:['idempotency.provider-key'],requestSchemaSha256:H,resultSchemaSha256:H2,receiptSchemaSha256:H3,compatible:true as const,reason:'COMPATIBLE' as const}};
 const guarantee=createContractBoundIdempotencyGuarantee(ready,'PROVIDER_KEY');
 
 test('safe read fence is deterministic and sealed',()=>{

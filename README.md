@@ -23,6 +23,7 @@ Implemented lanes:
 - **H1 — capability invocation lifecycle:** bind request, current-policy authorization, start, progress/cancellation intent, completion/failure evidence, and resume assessment to one tamper-evident invocation identity.
 - **Q1 — unified run budget ledger:** bound model/token/tool/network/retry/time/child consumption with append-only usage receipts and conservative child sub-allocation across the run tree.
 - **C1 — capability contract + version discovery:** discover self-describing capability contracts, prove major/minor/feature compatibility before contract-aware W1 compile and H1 start, and bind compiled/runtime use to exact descriptor provenance.
+- **C1B — contract / implementation identity separation:** keep semantic capability identity bound to versioned feature and schema digests while separately sealing provider/module/adapter/platform implementation identity; invocation readiness requires the exact selected provider tuple and provider changes require a fresh binding.
 - **X1 — idempotency / replay fence:** classify logical invocations before start, bind deterministic replay identity, and require reconciliation proof before retrying uncertain side effects.
 - **B1 — browser resilience hardening:** invalidate stale DOM across navigation/failure, emit degraded evidence instead of fabricated state, distinguish same-document/full-document readiness, bound truncation, and provide deterministic semantic element IDs.
 - **V1 — Agent0 graduation harness:** clean-room package-consumer proof exercises governed recipe, continuity, delegation, invocation, budgets, contracts, replay discipline, human interrupts, secret handles, browser degradation, checkpoint, and restart through public package boundaries; canonical proof emits `V1_AGENT0_VERTICAL_OK`.
@@ -73,7 +74,7 @@ Invocation records are evidence, not permission tokens; authorization is recheck
 
 Run budgets are accounting state, not capability grants; child allocations reserve parent fuel and already-spent or reserved capacity is never silently recreated on resume.
 
-Capability contract discovery is compatibility evidence, not authority. Contract-aware plans and invocations still require current P3 permission, and a changed implementation descriptor requires explicit recompile/rebind instead of silent adaptation.
+Capability contract discovery is compatibility evidence, not authority. Contract-aware plans and invocations still require current P3 permission. Semantic schema or feature changes require recompile; provider, adapter-registration, or implementation changes require explicit rebind instead of pretending the semantic contract changed or silently adopting a new implementation.
 
 Replay fences are retry-discipline evidence, not authority. Unknown external outcomes remain blocked until reconciliation; non-replayable mutations never become replayable merely because a transport timed out.
 

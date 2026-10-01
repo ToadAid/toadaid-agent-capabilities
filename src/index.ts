@@ -619,6 +619,7 @@ export type {
   CapabilityModuleLifecycleRecord,
   CapabilityModuleManifest,
   CapabilityModuleOwnedResource,
+  CapabilityModuleProviderPlatformDeclaration,
   CapabilityModuleRegistrationProjection,
   CapabilityModuleRuntime,
   CapabilityModuleState,

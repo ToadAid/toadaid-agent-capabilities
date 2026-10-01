@@ -3,6 +3,9 @@ import type {
   CapabilityManifest,
 } from "./capabilityPolicy.js";
 import type {
+  CapabilityProviderImplementationDescriptor,
+} from "./capabilityContractTypes.js";
+import type {
   CapabilityModuleAdapterRegistration,
   CapabilityModuleLifecycleEnvelope,
   CapabilityModuleRegistrationProjection,
@@ -36,6 +39,7 @@ export interface CapabilityProviderSelection {
   readonly lifecycleRecordSha256: string;
   readonly adapterRegistrationSha256: string;
   readonly descriptorSha256: string;
+  readonly providerDescriptorSha256: string;
   readonly implementationFingerprintSha256: string;
 }
 
@@ -51,8 +55,10 @@ export interface CapabilityProviderBinding {
   readonly adapterKind: CapabilityProviderAdapterKind;
   readonly adapterRegistrationSha256: string;
   readonly descriptorSha256: string;
+  readonly providerDescriptorSha256: string;
   readonly implementationFingerprintSha256: string;
   readonly registration: CapabilityModuleAdapterRegistration;
+  readonly providerImplementation: CapabilityProviderImplementationDescriptor;
 }
 
 export interface ComposeCapabilityProviderRegistryInput {
