@@ -10,6 +10,15 @@ import {
   normalizeConnectorAdapterRegistration,
 } from "./connectorAdapter.js";
 import {
+  normalizeDesktopObservationAdapterRegistration,
+} from "./desktopObservation.js";
+import {
+  normalizeDesktopInteractionAdapterRegistration,
+} from "./desktopInteraction.js";
+import {
+  normalizeHostServiceAdapterRegistration,
+} from "./hostService.js";
+import {
   boundedId,
   canonicalIso,
   sha,
@@ -22,9 +31,7 @@ import type {
   CapabilityContractDescriptor,
 } from "./capabilityContractTypes.js";
 import type {
-  ConnectorAdapterRegistration,
-} from "./connectorAdapterTypes.js";
-import type {
+  CapabilityModuleAdapterRegistration,
   CapabilityModuleInspectionEvidenceRef,
   CapabilityModuleLifecycleEnvelope,
   CapabilityModuleLifecycleRecord,
@@ -150,22 +157,39 @@ function normalizeInspectionEvidence(
   return Object.freeze(normalized);
 }
 
+export function normalizeCapabilityModuleAdapterRegistration(
+  adapter: CapabilityModuleAdapterRegistration,
+): CapabilityModuleAdapterRegistration {
+  switch (adapter.schemaVersion) {
+    case "toadaid.connector-adapter-registration.v1":
+      return normalizeConnectorAdapterRegistration(adapter);
+    case "toadaid.desktop-observation-adapter-registration.v1":
+      return normalizeDesktopObservationAdapterRegistration(adapter);
+    case "toadaid.desktop-interaction-adapter-registration.v1":
+      return normalizeDesktopInteractionAdapterRegistration(adapter);
+    case "toadaid.host-service-adapter-registration.v1":
+      return normalizeHostServiceAdapterRegistration(adapter);
+    default:
+      throw new TypeError("unsupported capability module adapter registration schemaVersion");
+  }
+}
+
 function normalizeAdapters(
-  adapters: readonly ConnectorAdapterRegistration[] | undefined,
-): readonly ConnectorAdapterRegistration[] {
+  adapters: readonly CapabilityModuleAdapterRegistration[] | undefined,
+): readonly CapabilityModuleAdapterRegistration[] {
   const seenIds = new Set<string>();
   const seenBindings = new Set<string>();
   const normalized = (adapters ?? []).map((adapter) => {
-    const value = normalizeConnectorAdapterRegistration(adapter);
+    const value = normalizeCapabilityModuleAdapterRegistration(adapter);
     if (seenIds.has(value.adapterId)) {
-      throw new TypeError(`duplicate connector adapter id: ${value.adapterId}`);
+      throw new TypeError(`duplicate module adapter id: ${value.adapterId}`);
     }
     seenIds.add(value.adapterId);
 
     const binding = `${value.capabilityId}\u0000${value.toolName}`;
     if (seenBindings.has(binding)) {
       throw new TypeError(
-        `duplicate connector capability/tool binding: ${value.capabilityId}/${value.toolName}`,
+        `duplicate module capability/tool binding: ${value.capabilityId}/${value.toolName}`,
       );
     }
     seenBindings.add(binding);
@@ -178,7 +202,7 @@ function normalizeAdapters(
 function assertModuleCrossBindings(
   capabilities: readonly CapabilityDefinition[],
   descriptors: readonly CapabilityContractDescriptor[],
-  adapters: readonly ConnectorAdapterRegistration[],
+  adapters: readonly CapabilityModuleAdapterRegistration[],
 ): void {
   const capabilityIds = new Set(capabilities.map((item) => item.id));
   const descriptorByCapability = new Map(
@@ -224,7 +248,7 @@ function capabilityModuleManifestCore(
   version: string,
   capabilities: readonly CapabilityDefinition[],
   contractDescriptors: readonly CapabilityContractDescriptor[],
-  adapters: readonly ConnectorAdapterRegistration[],
+  adapters: readonly CapabilityModuleAdapterRegistration[],
   ownedResources: readonly CapabilityModuleOwnedResource[],
 ): Omit<CapabilityModuleManifest, "manifestSha256"> {
   const normalizedCapabilities = normalizeCapabilityDefinitions(capabilities);

@@ -495,7 +495,7 @@ export function desktopObservationParametersSha256(
   );
 }
 
-function normalizeRegistration(
+export function normalizeDesktopObservationAdapterRegistration(
   value: DesktopObservationAdapterRegistration,
 ): DesktopObservationAdapterRegistration {
   if (
@@ -558,7 +558,7 @@ function normalizeRegistration(
 export function desktopObservationAdapterRegistrationSha256(
   value: DesktopObservationAdapterRegistration,
 ): string {
-  return sha256(normalizeRegistration(value));
+  return sha256(normalizeDesktopObservationAdapterRegistration(value));
 }
 
 function assertC1H1Binding(
@@ -1281,7 +1281,7 @@ export async function observeGovernedDesktop(
   const normalized =
     normalizeDesktopObservationRequest(input.request);
   const parametersSha256 = sha256(normalized);
-  const registration = normalizeRegistration(
+  const registration = normalizeDesktopObservationAdapterRegistration(
     adapter.registration,
   );
 

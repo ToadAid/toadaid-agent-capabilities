@@ -631,7 +631,7 @@ export function desktopInteractionParametersSha256(
   );
 }
 
-function normalizeRegistration(
+export function normalizeDesktopInteractionAdapterRegistration(
   value: DesktopInteractionAdapterRegistration,
 ): DesktopInteractionAdapterRegistration {
   if (
@@ -687,7 +687,7 @@ function normalizeRegistration(
 export function desktopInteractionAdapterRegistrationSha256(
   value: DesktopInteractionAdapterRegistration,
 ): string {
-  return sha256(normalizeRegistration(value));
+  return sha256(normalizeDesktopInteractionAdapterRegistration(value));
 }
 
 function assertC1H1Binding(
@@ -1285,7 +1285,7 @@ export async function interactGovernedDesktop(
       input.request,
     );
   const parametersSha256 = sha256(normalized);
-  const registration = normalizeRegistration(
+  const registration = normalizeDesktopInteractionAdapterRegistration(
     adapter.registration,
   );
 

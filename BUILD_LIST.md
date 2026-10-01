@@ -280,7 +280,7 @@ Checkbox law: mark an item complete only when the implementation is landed on ca
 
 ## Provider-runtime integration lane
 
-- [ ] **P14B — Typed provider module composition — NEXT CUT**
+- [x] **P14B — Typed provider module composition**
   - generalize P14 manifests from connector-only registrations to a discriminated union of connector, desktop-observation, desktop-interaction, and host-service adapter registrations
   - share exact adapter/capability/tool/contract/descriptor/implementation bindings while retaining adapter-kind-specific validation and typed P16/P17/P18 runtime interfaces
   - compose enabled module projections into one runtime provider registry without treating enabled state as P3 authority

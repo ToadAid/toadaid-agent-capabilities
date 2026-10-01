@@ -558,7 +558,7 @@ function mandatoryFeatures(
   return Object.freeze(features);
 }
 
-function normalizeRegistration(
+export function normalizeHostServiceAdapterRegistration(
   value: HostServiceAdapterRegistration,
 ): HostServiceAdapterRegistration {
   if (
@@ -594,7 +594,7 @@ function normalizeRegistration(
 export function hostServiceAdapterRegistrationSha256(
   value: HostServiceAdapterRegistration,
 ): string {
-  return sha256(normalizeRegistration(value));
+  return sha256(normalizeHostServiceAdapterRegistration(value));
 }
 
 function assertC1H1(
@@ -916,7 +916,7 @@ export async function invokeGovernedHostService(
   const normalized = normalizeHostServiceRequest(input.request);
   const parametersSha256 = sha256(normalized);
   const actionParametersSha256 = sha256(normalized.details);
-  const registration = normalizeRegistration(adapter.registration);
+  const registration = normalizeHostServiceAdapterRegistration(adapter.registration);
 
   const leaseBinding = assertHostConnectorSessionLeaseUsable(
     input.lease,

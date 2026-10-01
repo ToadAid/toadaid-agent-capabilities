@@ -4,6 +4,12 @@ import { fileURLToPath } from "node:url";
 
 import {
   CORE_CAPABILITY_MANIFEST,
+  HOST_SERVICE_CONTRACT_IDS,
+  HOST_SERVICE_TOOL_NAMES,
+  composeCapabilityProviderRegistry,
+  composeCapabilityRuntimeProviderRegistry,
+  createCapabilityModuleManifest,
+  createCapabilityProviderSelection,
   checkpointRunStateCapsule,
   childTaskSha256,
   createChildTask,
@@ -11,16 +17,20 @@ import {
   createRunStateCapsule,
   createSecretLease,
   createSecretMaterializationGrant,
+  enableCapabilityModule,
   createHumanInterruptResumeProof,
   parseChildTask,
   resolveCapabilityAuthority,
   resolveHumanInterrupt,
+  resolveCapabilityProvider,
+  resolveCapabilityRuntimeProvider,
   resolveResumeCapabilityAuthority,
   resumeRunStateCapsule,
   runStateCapsuleSha256,
   serializeChildTask,
   serializeRunStateCapsule,
   assertSecretMaterializationGrantUsable,
+  installCapabilityModule,
   transitionChildTask,
 } from "@toadaid/agent-capabilities";
 import {
@@ -42,6 +52,7 @@ import {
   serializeRunBudgetLedger,
 } from "@toadaid/agent-capabilities/budget";
 import {
+  capabilityContractDescriptorSha256,
   assertCapabilityInvocationContractReady,
   assertContractBoundRecipePlanCurrent,
   compileGovernedRecipeWithContracts,
@@ -72,6 +83,95 @@ function t(second) {
 function zeroBudget() {
   return { modelRequests: 0, inputTokens: 0, outputTokens: 0, toolCalls: 0, networkRequests: 0, retries: 0, wallClockMs: 0, childTasks: 0 };
 }
+
+const hostProviderDescriptor = {
+  schemaVersion: "toadaid.capability-contract.v1",
+  capabilityId: "host:notification",
+  contractId: HOST_SERVICE_CONTRACT_IDS["host:notification"],
+  version: { major: 1, minor: 0 },
+  features: [],
+  requestSchemaId: "toadaid.host.notification.request.v1",
+  receiptSchemaId: "toadaid.host.notification.receipt.v1",
+  implementation: {
+    implementationId: "v1-specialized-host-notification",
+    fingerprintSha256: sha("v1-specialized-host-notification"),
+  },
+};
+const hostProviderRegistration = {
+  schemaVersion: "toadaid.host-service-adapter-registration.v1",
+  adapterId: "v1-specialized-host-notification",
+  capabilityId: "host:notification",
+  toolName: HOST_SERVICE_TOOL_NAMES["host:notification"],
+  contractId: hostProviderDescriptor.contractId,
+  descriptorSha256: capabilityContractDescriptorSha256(hostProviderDescriptor),
+  implementationFingerprintSha256:
+    hostProviderDescriptor.implementation.fingerprintSha256,
+};
+const specializedHostProvider = {
+  registration: hostProviderRegistration,
+  async invoke(request) {
+    return {
+      schemaVersion: "toadaid.host-service-adapter-result.v1",
+      operationId: request.operationId,
+      hostId: request.hostId,
+      sessionId: request.sessionId,
+      capabilityId: request.capabilityId,
+      evidenceSha256: sha(request.operationId),
+    };
+  },
+};
+const hostProviderManifest = createCapabilityModuleManifest({
+  moduleId: "v1.specialized-host-provider",
+  version: "1.0.0",
+  capabilities: [{
+    id: "host:notification",
+    description: "Clean-room specialized host notification provider.",
+    defaultDecision: "BLOCK",
+  }],
+  contractDescriptors: [hostProviderDescriptor],
+  adapters: [specializedHostProvider.registration],
+});
+const hostProviderEnabled = enableCapabilityModule(
+  installCapabilityModule(hostProviderManifest, { installedAt: t(0) }),
+  t(1),
+);
+const hostProviderSelection = createCapabilityProviderSelection(
+  hostProviderEnabled,
+  specializedHostProvider.registration.adapterId,
+);
+const hostProviderRegistry = composeCapabilityProviderRegistry({
+  modules: [hostProviderEnabled],
+  selections: [hostProviderSelection],
+});
+const resolvedHostProvider = resolveCapabilityProvider(
+  hostProviderRegistry,
+  "host:notification",
+  HOST_SERVICE_TOOL_NAMES["host:notification"],
+  "HOST_SERVICE",
+);
+assert.equal(
+  resolvedHostProvider.adapterRegistrationSha256,
+  hostProviderSelection.adapterRegistrationSha256,
+);
+assert.deepEqual(resolvedHostProvider.registration, specializedHostProvider.registration);
+const hostRuntimeRegistry = composeCapabilityRuntimeProviderRegistry(
+  hostProviderRegistry,
+  [hostProviderEnabled],
+  [{
+    moduleId: hostProviderManifest.moduleId,
+    provider: specializedHostProvider,
+  }],
+);
+assert.equal(
+  resolveCapabilityRuntimeProvider(
+    hostRuntimeRegistry,
+    hostProviderRegistry,
+    "host:notification",
+    HOST_SERVICE_TOOL_NAMES["host:notification"],
+    "HOST_SERVICE",
+  ),
+  specializedHostProvider,
+);
 
 const resolvedRoot = fileURLToPath(import.meta.resolve("@toadaid/agent-capabilities"));
 assert.match(resolvedRoot, /node_modules[\\/]@toadaid[\\/]agent-capabilities[\\/]dist[\\/]src[\\/]index\.js$/);

@@ -37,7 +37,11 @@ function runState(revision = 3): RunStateCapsule {
     evidenceRefs: [],
     artifactRefs: [],
     work: { completed: [], pending: [], blocked: [] },
-    continuity: { generation: 3, reason: "MANUAL", previousCapsuleSha256: null },
+    continuity: {
+      generation: revision,
+      reason: "MANUAL",
+      previousCapsuleSha256: "a".repeat(64),
+    },
   };
 }
 

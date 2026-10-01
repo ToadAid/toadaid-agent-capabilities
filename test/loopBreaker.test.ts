@@ -117,7 +117,6 @@ test("valid tool-call JSON passes without repair", () => {
     repairAuthority(),
   );
   assert.equal(result.status, "VALID");
-  if (result.status === "REFUSED") assert.fail("unexpected refusal");
   assert.deepEqual(result.operations, []);
   assert.equal(result.toolCall.tool, "browser.inspect");
   assert.equal(result.toolCall.arguments.url, "https://example.com");
@@ -129,7 +128,6 @@ test("bounded repair unwraps a JSON fence and removes trailing commas only", () 
     repairAuthority(),
   );
   assert.equal(result.status, "REPAIRED");
-  if (result.status === "REFUSED") assert.fail("unexpected refusal");
   assert.deepEqual(result.operations, ["UNWRAP_JSON_CODE_FENCE", "REMOVE_TRAILING_COMMAS"]);
   assert.equal(result.toolCall.tool, "browser.inspect");
   assert.equal(result.toolCall.arguments.url, "https://example.com");
@@ -170,7 +168,6 @@ test("repaired nested arguments are recursively frozen", () => {
     repairAuthority(),
   );
   assert.equal(result.status, "VALID");
-  if (result.status === "REFUSED") assert.fail("unexpected refusal");
   assert.equal(Object.isFrozen(result.toolCall.arguments), true);
   assert.equal(Object.isFrozen(result.toolCall.arguments.nested), true);
 });

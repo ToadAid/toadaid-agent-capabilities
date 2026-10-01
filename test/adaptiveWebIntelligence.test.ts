@@ -87,7 +87,7 @@ test("extract worker request requires exact authority and carries no authority t
     },
     policy,
     { extract: allow("web:extract") },
-    "request-1",
+    "00000000-0000-4000-8000-000000000001",
   );
   assert.equal(request.operation, "EXTRACT");
   assert.equal(request.fetchMode, "HTTP");
@@ -147,12 +147,12 @@ test("worker response is origin/address/size constrained and hashes XHR-only by 
     },
     policy,
     { xhrCapture: allow("web:xhr-capture") },
-    "xhr-1",
+    "00000000-0000-4000-8000-000000000002",
   );
   const response = parseScraplingWorkerResponse(
     JSON.stringify({
       schemaVersion: "toadaid.scrapling-worker.response.v1",
-      requestId: "xhr-1",
+      requestId: "00000000-0000-4000-8000-000000000002",
       operation: "XHR_CAPTURE",
       status: "OK",
       requestedUrl: "https://example.com/dashboard?secret=gone",
@@ -228,7 +228,7 @@ test("crawl worker request uses web:crawl authority without silently borrowing w
     },
     policy,
     { crawl: allow("web:crawl") },
-    "crawl-fetch-1",
+    "00000000-0000-4000-8000-000000000003",
   );
   assert.equal(request.operation, "EXTRACT");
   assert.equal(request.capability, "web:crawl");

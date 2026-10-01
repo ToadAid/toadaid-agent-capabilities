@@ -275,6 +275,7 @@ export {
   assertDesktopObservationReceiptIntegrity,
   desktopObservationAdapterRegistrationSha256,
   desktopObservationParametersSha256,
+  normalizeDesktopObservationAdapterRegistration,
   normalizeDesktopObservationRequest,
   observeGovernedDesktop,
 } from "./desktopObservation.js";
@@ -316,6 +317,7 @@ export {
   desktopInteractionAdapterRegistrationSha256,
   desktopInteractionParametersSha256,
   interactGovernedDesktop,
+  normalizeDesktopInteractionAdapterRegistration,
   normalizeDesktopInteractionRequest,
 } from "./desktopInteraction.js";
 export type {
@@ -354,6 +356,7 @@ export {
   hostServiceAdapterRegistrationSha256,
   hostServiceParametersSha256,
   invokeGovernedHostService,
+  normalizeHostServiceAdapterRegistration,
   normalizeHostPathScope,
   normalizeHostRegistryScope,
   normalizeHostServiceRequest,
@@ -598,6 +601,7 @@ export {
   disableCapabilityModule,
   enableCapabilityModule,
   installCapabilityModule,
+  normalizeCapabilityModuleAdapterRegistration,
   parseCapabilityModuleLifecycle,
   projectEnabledCapabilityModule,
   removeCapabilityModule,
@@ -609,6 +613,7 @@ export {
   validateCapabilityModuleManifest,
 } from "./capabilityModuleLifecycle.js";
 export type {
+  CapabilityModuleAdapterRegistration,
   CapabilityModuleInspectionEvidenceRef,
   CapabilityModuleLifecycleEnvelope,
   CapabilityModuleLifecycleRecord,
@@ -623,3 +628,24 @@ export type {
   RemoveCapabilityModuleInput,
   UpdateCapabilityModuleInput,
 } from "./capabilityModuleLifecycleTypes.js";
+export {
+  assertCapabilityProviderRegistryCurrent,
+  capabilityProviderRegistrySha256,
+  composeCapabilityProviderRegistry,
+  composeCapabilityRuntimeProviderRegistry,
+  createCapabilityProviderSelection,
+  resolveCapabilityProvider,
+  resolveCapabilityRuntimeProvider,
+} from "./capabilityProviderRegistry.js";
+export type {
+  CapabilityProviderAdapterKind,
+  CapabilityProviderBinding,
+  CapabilityProviderRegistry,
+  CapabilityProviderSelection,
+  CapabilityRuntimeProviderBinding,
+  CapabilityRuntimeProviderCandidate,
+  CapabilityRuntimeProviderForKind,
+  CapabilityRuntimeProviderRegistry,
+  ComposeCapabilityProviderRegistryInput,
+  GovernedCapabilityRuntimeProvider,
+} from "./capabilityProviderRegistryTypes.js";

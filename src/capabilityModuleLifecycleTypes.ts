@@ -9,6 +9,21 @@ import type {
 import type {
   ConnectorAdapterRegistration,
 } from "./connectorAdapterTypes.js";
+import type {
+  DesktopObservationAdapterRegistration,
+} from "./desktopObservationTypes.js";
+import type {
+  DesktopInteractionAdapterRegistration,
+} from "./desktopInteractionTypes.js";
+import type {
+  HostServiceAdapterRegistration,
+} from "./hostServiceTypes.js";
+
+export type CapabilityModuleAdapterRegistration =
+  | ConnectorAdapterRegistration
+  | DesktopObservationAdapterRegistration
+  | DesktopInteractionAdapterRegistration
+  | HostServiceAdapterRegistration;
 
 export interface CapabilityModuleOwnedResource {
   readonly resourceId: string;
@@ -25,7 +40,7 @@ export interface CreateCapabilityModuleManifestInput {
   readonly version: string;
   readonly capabilities: readonly CapabilityDefinition[];
   readonly contractDescriptors?: readonly CapabilityContractDescriptor[];
-  readonly adapters?: readonly ConnectorAdapterRegistration[];
+  readonly adapters?: readonly CapabilityModuleAdapterRegistration[];
   readonly ownedResources?: readonly CapabilityModuleOwnedResource[];
 }
 
@@ -35,7 +50,7 @@ export interface CapabilityModuleManifest {
   readonly version: string;
   readonly capabilityManifest: CapabilityManifest;
   readonly contractRegistry: CapabilityContractRegistry;
-  readonly adapters: readonly ConnectorAdapterRegistration[];
+  readonly adapters: readonly CapabilityModuleAdapterRegistration[];
   readonly ownedResources: readonly CapabilityModuleOwnedResource[];
   readonly manifestSha256: string;
 }
@@ -103,5 +118,5 @@ export interface CapabilityModuleRegistrationProjection {
   readonly lifecycleRecordSha256: string;
   readonly capabilityManifest: CapabilityManifest;
   readonly contractRegistry: CapabilityContractRegistry;
-  readonly adapters: readonly ConnectorAdapterRegistration[];
+  readonly adapters: readonly CapabilityModuleAdapterRegistration[];
 }

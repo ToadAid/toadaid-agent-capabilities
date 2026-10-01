@@ -12,7 +12,7 @@ import {
   discoverCapabilityContracts,
 } from "../src/capabilityContract.js";
 import type { CapabilityContractDescriptor, CapabilityContractRequirement } from "../src/capabilityContract.js";
-import type { CapabilityInvocationEnvelope } from "../src/invocationTypes.js";
+import type { CapabilityInvocationEnvelope, CapabilityInvocationStatus } from "../src/invocationTypes.js";
 import type { GovernedRecipeDefinition } from "../src/recipeTypes.js";
 
 const A = "a".repeat(64);
@@ -60,7 +60,7 @@ const options = (registry: ReturnType<typeof createCapabilityContractRegistry>) 
   contractProfile: { schemaVersion: "toadaid.recipe-contract-profile.v1" as const, recipeId: "observe-page", recipeVersion: "1", requirements: [requirement()] },
 });
 
-const invocation = (status = "AUTHORIZED", intent = B): CapabilityInvocationEnvelope => ({
+const invocation = (status: CapabilityInvocationStatus = "AUTHORIZED", intent = B): CapabilityInvocationEnvelope => ({
   schemaVersion: "toadaid.capability-invocation-envelope.v1",
   recordSha256: C,
   record: {

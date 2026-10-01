@@ -19,7 +19,7 @@ function inv(status:CapabilityInvocationStatus='AUTHORIZED', id='inv-1', intent=
  return {schemaVersion:'toadaid.capability-invocation-envelope.v1',record,recordSha256:digest(record)};
 }
 const rt={now:()=>new Date('2026-09-25T10:05:00.000Z'),randomId:()=> 'recon-1'};
-const ready={schemaVersion:'toadaid.capability-invocation-contract-ready.v1' as const,invocationId:'inv-1',capabilityId:'review:fix',bindingSha256:H,compatibility:{descriptorSha256:H2,features:['idempotency.provider-key'],implementationFingerprintSha256:H3}};
+const ready={schemaVersion:'toadaid.capability-invocation-contract-ready.v1' as const,invocationId:'inv-1',capabilityId:'review:fix',bindingSha256:H,compatibility:{schemaVersion:'toadaid.capability-contract-compatibility.v1' as const,capabilityId:'review:fix',contractId:'toadaid.review.fix',requirementSha256:H3,descriptorSha256:H2,registrySha256:H,version:{major:1,minor:0},features:['idempotency.provider-key'],implementationFingerprintSha256:H3,compatible:true as const,reason:'COMPATIBLE' as const}};
 const guarantee=createContractBoundIdempotencyGuarantee(ready,'PROVIDER_KEY');
 
 test('safe read fence is deterministic and sealed',()=>{
@@ -66,7 +66,8 @@ test('retry authorization refuses changed invocation record after reconciliation
  const f=createReplayFence(inv(),{replayClass:'SAFE_READ'});
  const started=inv('STARTED'); const o=openReplayReconciliation(f,started,{reasonCode:'TIMEOUT_UNKNOWN'},rt);
  const r=resolveReplayReconciliation(o,{finding:'STILL_UNKNOWN',resolvedAt:'2026-09-25T10:06:00.000Z'},rt);
- const changed={...started,recordSha256:H3};
+ const changedRecord={...started.record,updatedAt:'2026-09-25T10:00:02.000Z'};
+ const changed={...started,record:changedRecord,recordSha256:digest(changedRecord)};
  assert.throws(()=>createReplayRetryAuthorization(f,r,changed,rt),/changed since reconciliation/);
 });
 
