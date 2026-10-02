@@ -65,11 +65,53 @@ export interface HostEnvironmentBinding {
 }
 
 export type HostRegistryHive = "HKCU" | "HKLM";
+export type HostRegistryView =
+  | "REGISTRY_32"
+  | "REGISTRY_64";
 
 export interface HostRegistryScope {
   readonly hive: HostRegistryHive;
+  readonly view: HostRegistryView;
   readonly rootKeyPath: string;
   readonly keyPath: string;
+}
+
+export interface HostServiceProviderIdentity {
+  readonly providerDescriptorSha256: string;
+  readonly providerGenerationSha256: string;
+  readonly evidenceNamespace: string;
+}
+
+export interface HostProcessReference {
+  readonly schemaVersion:
+    "toadaid.host-process-reference.v1";
+  readonly hostId: string;
+  readonly sessionId: string;
+  readonly pid: number;
+  readonly processRef: string;
+  readonly processReadReceiptSha256: string;
+  readonly processEvidenceSha256: string;
+  readonly providerDescriptorSha256: string;
+  readonly providerGenerationSha256: string;
+  readonly evidenceNamespace: string;
+  readonly observedAt: string;
+  readonly referenceSha256: string;
+}
+
+export interface HostServiceEvidenceRuntime {
+  readonly resolveCurrentProviderIdentity: (
+    identity: Readonly<{
+      hostId: string;
+      sessionId: string;
+    }>,
+  ) => HostServiceProviderIdentity | null;
+  readonly resolveCurrentProcessReference: (
+    identity: Readonly<{
+      hostId: string;
+      sessionId: string;
+      processRef: string;
+    }>,
+  ) => HostProcessReference | null;
 }
 
 interface HostServiceBase {
@@ -111,9 +153,7 @@ export interface HostProcessReadRequest extends HostServiceBase {
 
 export interface HostProcessStopRequest extends HostServiceBase {
   readonly kind: "PROCESS_STOP";
-  readonly pid: number;
-  readonly processEvidenceSha256: string;
-  readonly processObservedAt: string;
+  readonly process: HostProcessReference;
   readonly maxEvidenceAgeMs?: number;
 }
 
@@ -212,6 +252,7 @@ export interface HostServiceAdapterRequest {
   readonly sessionId: string;
   readonly ownerId: string;
   readonly capabilityId: HostServiceCapabilityId;
+  readonly providerIdentity: HostServiceProviderIdentity;
   readonly toolName: string;
   readonly parametersSha256: string;
   readonly actionParametersSha256: string;
@@ -253,6 +294,7 @@ export interface HostServiceRuntime {
 export interface GovernedHostServiceInput {
   readonly lease: HostConnectorSessionLeaseEnvelope;
   readonly leaseRuntime: HostConnectorSessionUseRuntime;
+  readonly evidenceRuntime: HostServiceEvidenceRuntime;
   readonly sessionAuthority: CapabilityAuthorityDecision;
   readonly actionAuthority: CapabilityAuthorityDecision;
   readonly invocation: CapabilityInvocationEnvelope;
@@ -280,6 +322,9 @@ export interface HostServiceReceipt {
   readonly hostId: string;
   readonly sessionId: string;
   readonly ownerId: string;
+  readonly providerDescriptorSha256: string;
+  readonly providerGenerationSha256: string;
+  readonly evidenceNamespace: string;
   readonly leaseSha256: string;
   readonly contractBindingSha256: string;
   readonly descriptorSha256: string;

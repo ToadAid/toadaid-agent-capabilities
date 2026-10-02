@@ -36,7 +36,10 @@ import type {
   GovernedHostServiceOutcome,
   HostEnvironmentBinding,
   HostPathScope,
+  HostProcessReference,
   HostRegistryScope,
+  HostServiceEvidenceRuntime,
+  HostServiceProviderIdentity,
   HostServiceAdapterRegistration,
   HostServiceAdapterRequest,
   HostServiceAdapterResult,
@@ -122,6 +125,12 @@ const MAX_ARG = 4_096;
 const MAX_ENV = 32;
 const MAX_JSON_BYTES = 256 * 1024;
 const MAX_ARTIFACTS = 32;
+
+export const LEGACY_HOST_CAPABILITY_ALIASES = Object.freeze({
+  "host:file-read": "host:filesystem-read",
+  "host:file-write": "host:filesystem-write",
+  "host:command-exec": "host:command-execute",
+} as const);
 
 function objectValue(value: unknown, label: string): Record<string, unknown> {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
@@ -310,6 +319,14 @@ export function normalizeHostRegistryScope(
   if (raw.hive !== "HKCU" && raw.hive !== "HKLM") {
     throw new TypeError("registry scope hive must be HKCU or HKLM");
   }
+  if (
+    raw.view !== "REGISTRY_32" &&
+    raw.view !== "REGISTRY_64"
+  ) {
+    throw new TypeError(
+      "registry scope requires explicit REGISTRY_32 or REGISTRY_64 view",
+    );
+  }
   const clean = (value: string, label: string) => {
     const parts = text(value, 2_048, label)
       .replace(/\//g, "\\")
@@ -335,10 +352,327 @@ export function normalizeHostRegistryScope(
   }
   return Object.freeze({
     hive: raw.hive,
+    view: raw.view,
     rootKeyPath,
     keyPath,
     relativeKeyPath:
       keyLower === rootLower ? "" : keyPath.slice(rootKeyPath.length + 1),
+  });
+}
+
+export function normalizeHostServiceProviderIdentity(
+  value: HostServiceProviderIdentity,
+): HostServiceProviderIdentity {
+  const raw = objectValue(
+    value,
+    "host service provider identity",
+  );
+  return Object.freeze({
+    providerDescriptorSha256: sha(
+      raw.providerDescriptorSha256 as string,
+      "providerDescriptorSha256",
+    )!,
+    providerGenerationSha256: sha(
+      raw.providerGenerationSha256 as string,
+      "providerGenerationSha256",
+    )!,
+    evidenceNamespace: boundedId(
+      raw.evidenceNamespace as string,
+      "evidenceNamespace",
+    ),
+  });
+}
+
+export function normalizeHostProcessReference(
+  value: HostProcessReference,
+): HostProcessReference {
+  const raw = objectValue(
+    value,
+    "host process reference",
+  );
+  if (
+    raw.schemaVersion !==
+    "toadaid.host-process-reference.v1"
+  ) {
+    throw new TypeError(
+      "unsupported host process reference schemaVersion",
+    );
+  }
+  const core = Object.freeze({
+    schemaVersion:
+      "toadaid.host-process-reference.v1" as const,
+    hostId: boundedId(
+      raw.hostId as string,
+      "process.hostId",
+    ),
+    sessionId: boundedId(
+      raw.sessionId as string,
+      "process.sessionId",
+    ),
+    pid: boundedPositive(
+      raw.pid as number,
+      1,
+      2_147_483_647,
+      "process.pid",
+    ),
+    processRef: ref(
+      raw.processRef as string,
+      "process.processRef",
+    ),
+    processReadReceiptSha256: sha(
+      raw.processReadReceiptSha256 as string,
+      "process.processReadReceiptSha256",
+    )!,
+    processEvidenceSha256: sha(
+      raw.processEvidenceSha256 as string,
+      "process.processEvidenceSha256",
+    )!,
+    providerDescriptorSha256: sha(
+      raw.providerDescriptorSha256 as string,
+      "process.providerDescriptorSha256",
+    )!,
+    providerGenerationSha256: sha(
+      raw.providerGenerationSha256 as string,
+      "process.providerGenerationSha256",
+    )!,
+    evidenceNamespace: boundedId(
+      raw.evidenceNamespace as string,
+      "process.evidenceNamespace",
+    ),
+    observedAt: canonicalIso(
+      raw.observedAt as string,
+      "process.observedAt",
+    ),
+  });
+  const referenceSha256 = sha(
+    raw.referenceSha256 as string,
+    "process.referenceSha256",
+  )!;
+  if (referenceSha256 !== sha256(core)) {
+    throw new Error(
+      "host process reference integrity mismatch",
+    );
+  }
+  return Object.freeze({
+    ...core,
+    referenceSha256,
+  });
+}
+
+export function createHostProcessReference(
+  receipt: HostServiceReceipt,
+  input: Readonly<{
+    pid: number;
+    processRef: string;
+    observedAt?: string;
+  }>,
+): HostProcessReference {
+  if (
+    receipt.status !== "OK" ||
+    receipt.capabilityId !== "host:process-read" ||
+    receipt.resultEvidenceSha256 === null
+  ) {
+    throw new Error(
+      "host process reference requires successful governed host:process-read receipt",
+    );
+  }
+  const core = Object.freeze({
+    schemaVersion:
+      "toadaid.host-process-reference.v1" as const,
+    hostId: boundedId(
+      receipt.hostId,
+      "process.hostId",
+    ),
+    sessionId: boundedId(
+      receipt.sessionId,
+      "process.sessionId",
+    ),
+    pid: boundedPositive(
+      input.pid,
+      1,
+      2_147_483_647,
+      "process.pid",
+    ),
+    processRef: ref(
+      input.processRef,
+      "process.processRef",
+    ),
+    processReadReceiptSha256: sha(
+      receipt.receiptSha256,
+      "process.processReadReceiptSha256",
+    )!,
+    processEvidenceSha256: sha(
+      receipt.resultEvidenceSha256,
+      "process.processEvidenceSha256",
+    )!,
+    providerDescriptorSha256: sha(
+      receipt.providerDescriptorSha256,
+      "process.providerDescriptorSha256",
+    )!,
+    providerGenerationSha256: sha(
+      receipt.providerGenerationSha256,
+      "process.providerGenerationSha256",
+    )!,
+    evidenceNamespace: boundedId(
+      receipt.evidenceNamespace,
+      "process.evidenceNamespace",
+    ),
+    observedAt: canonicalIso(
+      input.observedAt ?? receipt.invokedAt,
+      "process.observedAt",
+    ),
+  });
+  return Object.freeze({
+    ...core,
+    referenceSha256: sha256(core),
+  });
+}
+
+function currentProviderIdentity(
+  runtime: HostServiceEvidenceRuntime,
+  hostId: string,
+  sessionId: string,
+): HostServiceProviderIdentity {
+  const current =
+    runtime.resolveCurrentProviderIdentity({
+      hostId,
+      sessionId,
+    });
+  if (current === null) {
+    throw new Error(
+      "host service current provider identity is unavailable",
+    );
+  }
+  return normalizeHostServiceProviderIdentity(
+    current,
+  );
+}
+
+function assertProcessReferenceCurrent(
+  request: NormalizedHostServiceRequest,
+  runtime: HostServiceEvidenceRuntime,
+  provider: HostServiceProviderIdentity,
+  now: Date,
+): void {
+  if (request.kind !== "PROCESS_STOP") return;
+  const details = objectValue(
+    request.details,
+    "process stop details",
+  );
+  const process = normalizeHostProcessReference(
+    details.process as unknown as HostProcessReference,
+  );
+  const maxEvidenceAgeMs =
+    details.maxEvidenceAgeMs;
+  if (typeof maxEvidenceAgeMs !== "number") {
+    throw new TypeError(
+      "process stop maxEvidenceAgeMs is missing",
+    );
+  }
+
+  const ageMs =
+    now.getTime() - Date.parse(process.observedAt);
+  if (
+    !Number.isFinite(ageMs) ||
+    ageMs < 0 ||
+    ageMs > maxEvidenceAgeMs
+  ) {
+    throw new Error(
+      "process stop reference is stale or from the future",
+    );
+  }
+
+  if (
+    process.hostId !== request.hostId ||
+    process.sessionId !== request.sessionId ||
+    process.providerDescriptorSha256 !==
+      provider.providerDescriptorSha256 ||
+    process.providerGenerationSha256 !==
+      provider.providerGenerationSha256 ||
+    process.evidenceNamespace !==
+      provider.evidenceNamespace
+  ) {
+    throw new Error(
+      "process stop reference provider/session identity is stale or mismatched",
+    );
+  }
+
+  const current =
+    runtime.resolveCurrentProcessReference({
+      hostId: process.hostId,
+      sessionId: process.sessionId,
+      processRef: process.processRef,
+    });
+  if (
+    current === null ||
+    normalizeHostProcessReference(current)
+      .referenceSha256 !== process.referenceSha256
+  ) {
+    throw new Error(
+      "process stop reference is not current governed process-read evidence",
+    );
+  }
+}
+
+function assertLeaseDurationFitsOperation(
+  expiresAt: string,
+  now: Date,
+  maxWallClockMs: number,
+): void {
+  const expiresAtMs = Date.parse(expiresAt);
+  if (
+    !Number.isFinite(expiresAtMs) ||
+    now.getTime() + maxWallClockMs >
+      expiresAtMs
+  ) {
+    throw new Error(
+      "host service operation cannot fit inside remaining P15 lease lifetime",
+    );
+  }
+}
+
+function assertNoLegacyAliasConflict(
+  input: GovernedHostServiceInput,
+  capability: HostServiceCapabilityId,
+): void {
+  const legacy =
+    LEGACY_HOST_CAPABILITY_ALIASES[
+      capability as keyof typeof LEGACY_HOST_CAPABILITY_ALIASES
+    ];
+  if (
+    legacy !== undefined &&
+    input.lease.lease.allowedCapabilities.includes(
+      legacy,
+    )
+  ) {
+    throw new Error(
+      `host service lease mixes deprecated ${legacy} with structured ${capability}`,
+    );
+  }
+}
+
+function hostProcessReferenceJson(
+  value: HostProcessReference,
+): HostServiceJsonValue {
+  const process = normalizeHostProcessReference(value);
+  return Object.freeze({
+    schemaVersion: process.schemaVersion,
+    hostId: process.hostId,
+    sessionId: process.sessionId,
+    pid: process.pid,
+    processRef: process.processRef,
+    processReadReceiptSha256:
+      process.processReadReceiptSha256,
+    processEvidenceSha256:
+      process.processEvidenceSha256,
+    providerDescriptorSha256:
+      process.providerDescriptorSha256,
+    providerGenerationSha256:
+      process.providerGenerationSha256,
+    evidenceNamespace:
+      process.evidenceNamespace,
+    observedAt: process.observedAt,
+    referenceSha256: process.referenceSha256,
   });
 }
 
@@ -395,12 +729,8 @@ function detailsFor(request: HostServiceRequest): HostServiceJsonValue {
       });
     case "PROCESS_STOP":
       return Object.freeze({
-        pid: boundedPositive(request.pid, 1, 2_147_483_647, "pid"),
-        processEvidenceSha256:
-          sha(request.processEvidenceSha256, "processEvidenceSha256")!,
-        processObservedAt: canonicalIso(
-          request.processObservedAt,
-          "processObservedAt",
+        process: hostProcessReferenceJson(
+          request.process,
         ),
         maxEvidenceAgeMs: boundedPositive(
           request.maxEvidenceAgeMs,
@@ -542,7 +872,14 @@ function mandatoryFeatures(
     "least-privilege-host-service",
     "bounded-result-evidence",
   ];
+  features.push("provider-generation-bound");
   if (request.mutation) features.push("x1-reconciled-mutation");
+  if (
+    request.kind === "REGISTRY_READ" ||
+    request.kind === "REGISTRY_WRITE"
+  ) {
+    features.push("explicit-registry-view");
+  }
   if (request.kind === "FILE_READ" || request.kind === "FILE_WRITE") {
     features.push("realpath-scope-enforced");
   }
@@ -553,7 +890,10 @@ function mandatoryFeatures(
     );
   }
   if (request.kind === "PROCESS_STOP") {
-    features.push("process-identity-evidence-enforced");
+    features.push(
+      "process-identity-evidence-enforced",
+      "governed-process-reference",
+    );
   }
   return Object.freeze(features);
 }
@@ -722,37 +1062,6 @@ function assertReplayFence(
   return fence;
 }
 
-function assertProcessEvidenceFresh(
-  request: NormalizedHostServiceRequest,
-  now: Date,
-): void {
-  if (request.kind !== "PROCESS_STOP") return;
-  const details = objectValue(
-    request.details,
-    "process stop details",
-  );
-  const observedAt = details.processObservedAt;
-  const maxEvidenceAgeMs = details.maxEvidenceAgeMs;
-  if (
-    typeof observedAt !== "string" ||
-    typeof maxEvidenceAgeMs !== "number"
-  ) {
-    throw new TypeError(
-      "process stop evidence freshness fields are missing",
-    );
-  }
-  const ageMs = now.getTime() - Date.parse(observedAt);
-  if (
-    !Number.isFinite(ageMs) ||
-    ageMs < 0 ||
-    ageMs > maxEvidenceAgeMs
-  ) {
-    throw new Error(
-      "process stop evidence is stale or from the future",
-    );
-  }
-}
-
 function zeroCost(): RunBudgetVector {
   return {
     modelRequests: 0,
@@ -919,6 +1228,10 @@ export async function invokeGovernedHostService(
   const parametersSha256 = sha256(normalized);
   const actionParametersSha256 = sha256(normalized.details);
   const registration = normalizeHostServiceAdapterRegistration(adapter.registration);
+  assertNoLegacyAliasConflict(
+    input,
+    normalized.capabilityId,
+  );
 
   const leaseBinding = assertHostConnectorSessionLeaseUsable(
     input.lease,
@@ -937,6 +1250,19 @@ export async function invokeGovernedHostService(
 
   const { invocation, binding, compatibility } =
     assertC1H1(input, normalized, registration);
+  const providerIdentity = currentProviderIdentity(
+    input.evidenceRuntime,
+    normalized.hostId,
+    normalized.sessionId,
+  );
+  if (
+    providerIdentity.providerDescriptorSha256 !==
+    binding.providerDescriptorSha256
+  ) {
+    throw new Error(
+      "host service current provider descriptor does not match current C1 binding",
+    );
+  }
   const replayFence = assertReplayFence(
     input,
     invocation,
@@ -947,7 +1273,17 @@ export async function invokeGovernedHostService(
   if (!(now instanceof Date) || Number.isNaN(now.getTime())) {
     throw new TypeError("host service runtime now is invalid");
   }
-  assertProcessEvidenceFresh(normalized, now);
+  assertLeaseDurationFitsOperation(
+    leaseBinding.expiresAt,
+    now,
+    normalized.maxWallClockMs,
+  );
+  assertProcessReferenceCurrent(
+    normalized,
+    input.evidenceRuntime,
+    providerIdentity,
+    now,
+  );
 
   const budgetBefore = validateRunBudgetLedgerEnvelope(input.budget);
   if (budgetBefore.record.runId !== invocation.record.runId) {
@@ -1004,6 +1340,7 @@ export async function invokeGovernedHostService(
     sessionId: normalized.sessionId,
     ownerId: normalized.ownerId,
     capabilityId: normalized.capabilityId,
+    providerIdentity,
     toolName: normalized.toolName,
     parametersSha256,
     actionParametersSha256,
@@ -1029,6 +1366,12 @@ export async function invokeGovernedHostService(
       hostId: normalized.hostId,
       sessionId: normalized.sessionId,
       ownerId: normalized.ownerId,
+      providerDescriptorSha256:
+        providerIdentity.providerDescriptorSha256,
+      providerGenerationSha256:
+        providerIdentity.providerGenerationSha256,
+      evidenceNamespace:
+        providerIdentity.evidenceNamespace,
       leaseSha256: leaseBinding.leaseSha256,
       contractBindingSha256: binding.bindingSha256,
       descriptorSha256: compatibility.descriptorSha256,
@@ -1097,6 +1440,12 @@ export async function invokeGovernedHostService(
         hostId: normalized.hostId,
         sessionId: normalized.sessionId,
         ownerId: normalized.ownerId,
+        providerDescriptorSha256:
+          providerIdentity.providerDescriptorSha256,
+        providerGenerationSha256:
+          providerIdentity.providerGenerationSha256,
+        evidenceNamespace:
+          providerIdentity.evidenceNamespace,
         leaseSha256: leaseBinding.leaseSha256,
         contractBindingSha256: binding.bindingSha256,
         descriptorSha256: compatibility.descriptorSha256,
@@ -1141,6 +1490,12 @@ export async function invokeGovernedHostService(
       hostId: normalized.hostId,
       sessionId: normalized.sessionId,
       ownerId: normalized.ownerId,
+      providerDescriptorSha256:
+        providerIdentity.providerDescriptorSha256,
+      providerGenerationSha256:
+        providerIdentity.providerGenerationSha256,
+      evidenceNamespace:
+        providerIdentity.evidenceNamespace,
       leaseSha256: leaseBinding.leaseSha256,
       contractBindingSha256: binding.bindingSha256,
       descriptorSha256: compatibility.descriptorSha256,

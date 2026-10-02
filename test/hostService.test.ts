@@ -21,6 +21,7 @@ import {
 import {
   HOST_SERVICE_CONTRACT_IDS,
   HOST_SERVICE_TOOL_NAMES,
+  createHostProcessReference,
   hostServiceAdapterRegistrationSha256,
   hostServiceParametersSha256,
   invokeGovernedHostService,
@@ -31,6 +32,7 @@ import {
 import type {
   GovernedHostServiceAdapter,
   HostFileReadRequest,
+  HostProcessReference,
   HostFileWriteRequest,
   HostServiceAdapterRegistration,
   HostServiceCapabilityId,
@@ -84,7 +86,11 @@ function requiredFeatures(request: HostServiceRequest): readonly string[] {
     "least-privilege-host-service",
     "bounded-result-evidence",
   ];
+  out.push("provider-generation-bound");
   if (n.mutation) out.push("x1-reconciled-mutation");
+  if (n.kind === "REGISTRY_READ" || n.kind === "REGISTRY_WRITE") {
+    out.push("explicit-registry-view");
+  }
   if (n.kind === "FILE_READ" || n.kind === "FILE_WRITE") {
     out.push("realpath-scope-enforced");
   }
@@ -95,7 +101,10 @@ function requiredFeatures(request: HostServiceRequest): readonly string[] {
     );
   }
   if (n.kind === "PROCESS_STOP") {
-    out.push("process-identity-evidence-enforced");
+    out.push(
+      "process-identity-evidence-enforced",
+      "governed-process-reference",
+    );
   }
   return out;
 }
@@ -256,6 +265,25 @@ function context(
     compatibility,
   };
 
+  const providerIdentity = Object.freeze({
+    providerDescriptorSha256:
+      binding.providerDescriptorSha256,
+    providerGenerationSha256:
+      "7".repeat(64),
+    evidenceNamespace:
+      "host-service-generation-001",
+  });
+  const processReferences = new Map<
+    string,
+    HostProcessReference
+  >();
+  if (request.kind === "PROCESS_STOP") {
+    processReferences.set(
+      request.process.processRef,
+      request.process,
+    );
+  }
+
   const lease = createHostConnectorSessionLease(
     {
       hostId: "dell7920",
@@ -309,6 +337,16 @@ function context(
       leaseRuntime: {
         now: () => new Date(NOW),
         resolveCurrentLeaseSha256: () => lease.leaseSha256,
+      },
+      evidenceRuntime: {
+        resolveCurrentProviderIdentity: () =>
+          providerIdentity,
+        resolveCurrentProcessReference: ({
+          processRef,
+        }: {
+          processRef: string;
+        }) =>
+          processReferences.get(processRef) ?? null,
       },
       sessionAuthority: policy("host:session"),
       actionAuthority: policy(capabilityId),
@@ -393,7 +431,11 @@ test("P18 file contracts require realpath-scope C1 feature", async () => {
     fileRead(),
     null,
     {},
-    ["least-privilege-host-service", "bounded-result-evidence"],
+    [
+      "least-privilege-host-service",
+      "bounded-result-evidence",
+      "provider-generation-bound",
+    ],
   );
   let calls = 0;
   const adapter: GovernedHostServiceAdapter = {
@@ -524,51 +566,132 @@ test("P18 structured command exec has absolute executable, argv, bounded cwd/env
   );
 });
 
-test("P18 process stop requires fresh identity evidence and adapter enforcement", async () => {
-  assert.throws(
-    () =>
-      normalizeHostServiceRequest({
-        kind: "PROCESS_STOP",
-        hostId: "dell7920",
-        sessionId: "host-session-001",
-        ownerId: "agent0",
-        pid: 42,
-        processEvidenceSha256: "bad",
-        processObservedAt: NOW,
-      }),
-    /processEvidenceSha256/,
-  );
-
-  const request: HostServiceRequest = {
-    kind: "PROCESS_STOP",
+test("P18B-P1 process stop requires a current governed process-read reference", async () => {
+  const readRequest: HostServiceRequest = {
+    kind: "PROCESS_READ",
     hostId: "dell7920",
     sessionId: "host-session-001",
     ownerId: "agent0",
     pid: 42,
-    processEvidenceSha256: "3".repeat(64),
-    processObservedAt: NOW,
-    maxEvidenceAgeMs: 5_000,
+    maxResults: 1,
+    maxWallClockMs: 5_000,
   };
-  const ctx = context(request, "NON_REPLAYABLE");
+  const readCtx = context(readRequest);
+  const readOutcome = await invokeGovernedHostService(
+    readCtx.adapter,
+    readCtx.input,
+    {
+      now: () => new Date(NOW),
+      randomId: () => "host-service-process-read",
+    },
+  );
+  assert.equal(readOutcome.receipt.status, "OK");
+  const process = createHostProcessReference(
+    readOutcome.receipt,
+    {
+      pid: 42,
+      processRef: "process-ref-42",
+      observedAt: NOW,
+    },
+  );
+
+  const stopRequest: HostServiceRequest = {
+    kind: "PROCESS_STOP",
+    hostId: "dell7920",
+    sessionId: "host-session-001",
+    ownerId: "agent0",
+    process,
+    maxEvidenceAgeMs: 5_000,
+    maxWallClockMs: 5_000,
+  };
+  const stopCtx = context(
+    stopRequest,
+    "NON_REPLAYABLE",
+  );
   const outcome = await invokeGovernedHostService(
-    ctx.adapter,
-    ctx.input,
+    stopCtx.adapter,
+    stopCtx.input,
     {
       now: () => new Date(NOW),
       randomId: () => "host-service-stop",
     },
   );
   assert.equal(outcome.receipt.status, "OK");
+  assert.equal(
+    outcome.receipt.providerGenerationSha256,
+    process.providerGenerationSha256,
+  );
+  assert.equal(
+    outcome.receipt.evidenceNamespace,
+    process.evidenceNamespace,
+  );
 
-  const staleRequest: HostServiceRequest = {
-    ...request,
-    processObservedAt: "2026-09-27T03:59:50.000Z",
+  const missingCurrent = context(
+    stopRequest,
+    "NON_REPLAYABLE",
+  );
+  const missingRuntime = {
+    ...missingCurrent.input.evidenceRuntime,
+    resolveCurrentProcessReference() {
+      return null;
+    },
   };
-  const stale = context(staleRequest, "NON_REPLAYABLE");
   await assert.rejects(
     invokeGovernedHostService(
-      stale.adapter,
-      stale.input,
+      missingCurrent.adapter,
+      {
+        ...missingCurrent.input,
+        evidenceRuntime: missingRuntime,
+      },
+      {
+        now: () => new Date(NOW),
+        randomId: () => "host-service-stop-missing-current",
+      },
+    ),
+    /not current governed process-read evidence/,
+  );
+
+  const stale = {
+    ...process,
+    observedAt:
+      "2026-09-27T03:59:50.000Z",
+  };
+  const staleCore = {
+    schemaVersion: stale.schemaVersion,
+    hostId: stale.hostId,
+    sessionId: stale.sessionId,
+    pid: stale.pid,
+    processRef: stale.processRef,
+    processReadReceiptSha256:
+      stale.processReadReceiptSha256,
+    processEvidenceSha256:
+      stale.processEvidenceSha256,
+    providerDescriptorSha256:
+      stale.providerDescriptorSha256,
+    providerGenerationSha256:
+      stale.providerGenerationSha256,
+    evidenceNamespace:
+      stale.evidenceNamespace,
+    observedAt: stale.observedAt,
+  };
+  const staleRef: HostProcessReference = {
+    ...staleCore,
+    referenceSha256:
+      (await import("../src/invocationSchema.js"))
+        .sha256(staleCore),
+  };
+  const staleRequest: HostServiceRequest = {
+    ...stopRequest,
+    process: staleRef,
+  };
+  const staleCtx = context(
+    staleRequest,
+    "NON_REPLAYABLE",
+  );
+  await assert.rejects(
+    invokeGovernedHostService(
+      staleCtx.adapter,
+      staleCtx.input,
       {
         now: () => new Date(NOW),
         randomId: () => "host-service-stop-stale",
@@ -576,42 +699,113 @@ test("P18 process stop requires fresh identity evidence and adapter enforcement"
     ),
     /stale or from the future/,
   );
+});
 
-  const missingFeature = context(
+test("P18B-P1 process reference integrity and provider generation are fail-closed", async () => {
+  const readCtx = context({
+    kind: "PROCESS_READ",
+    hostId: "dell7920",
+    sessionId: "host-session-001",
+    ownerId: "agent0",
+    pid: 77,
+    maxResults: 1,
+  });
+  const readOutcome = await invokeGovernedHostService(
+    readCtx.adapter,
+    readCtx.input,
+    {
+      now: () => new Date(NOW),
+      randomId: () => "host-service-process-read-77",
+    },
+  );
+  const process = createHostProcessReference(
+    readOutcome.receipt,
+    {
+      pid: 77,
+      processRef: "process-ref-77",
+    },
+  );
+
+  assert.throws(
+    () =>
+      normalizeHostServiceRequest({
+        kind: "PROCESS_STOP",
+        hostId: "dell7920",
+        sessionId: "host-session-001",
+        ownerId: "agent0",
+        process: {
+          ...process,
+          pid: 78,
+        },
+      }),
+    /integrity mismatch/,
+  );
+
+  const request: HostServiceRequest = {
+    kind: "PROCESS_STOP",
+    hostId: "dell7920",
+    sessionId: "host-session-001",
+    ownerId: "agent0",
+    process,
+  };
+  const ctx = context(
     request,
     "NON_REPLAYABLE",
-    {},
-    [
-      "least-privilege-host-service",
-      "bounded-result-evidence",
-      "x1-reconciled-mutation",
-    ],
   );
+  const changedGeneration = {
+    ...ctx.input.evidenceRuntime,
+    resolveCurrentProviderIdentity() {
+      return {
+        providerDescriptorSha256:
+          process.providerDescriptorSha256,
+        providerGenerationSha256:
+          "0".repeat(64),
+        evidenceNamespace:
+          process.evidenceNamespace,
+      };
+    },
+  };
   await assert.rejects(
     invokeGovernedHostService(
-      missingFeature.adapter,
-      missingFeature.input,
+      ctx.adapter,
+      {
+        ...ctx.input,
+        evidenceRuntime: changedGeneration,
+      },
       {
         now: () => new Date(NOW),
-        randomId: () => "host-service-stop-missing-feature",
+        randomId: () => "host-service-stop-provider-stale",
       },
     ),
-    /missing mandatory feature: process-identity-evidence-enforced/,
+    /provider\/session identity is stale or mismatched/,
   );
 });
 
 test("P18 registry root scope is bounded and read/write authority is distinct", () => {
   const scope = normalizeHostRegistryScope({
     hive: "HKCU",
+    view: "REGISTRY_64",
     rootKeyPath: "Software\\ToadAid",
     keyPath: "Software\\ToadAid\\Agent",
   }) as Record<string, unknown>;
   assert.equal(scope.relativeKeyPath, "Agent");
+  assert.equal(scope.view, "REGISTRY_64");
 
   assert.throws(
     () =>
       normalizeHostRegistryScope({
         hive: "HKCU",
+        rootKeyPath: "Software\\ToadAid",
+        keyPath: "Software\\ToadAid\\Agent",
+      } as never),
+    /requires explicit REGISTRY_32 or REGISTRY_64 view/,
+  );
+
+  assert.throws(
+    () =>
+      normalizeHostRegistryScope({
+        hive: "HKCU",
+    view: "REGISTRY_64",
         rootKeyPath: "Software\\ToadAid",
         keyPath: "Software\\Other",
       }),
@@ -625,6 +819,7 @@ test("P18 registry root scope is bounded and read/write authority is distinct", 
     ownerId: "agent0",
     scope: {
       hive: "HKCU",
+    view: "REGISTRY_64",
       rootKeyPath: "Software\\ToadAid",
       keyPath: "Software\\ToadAid\\Agent",
     },
@@ -636,6 +831,7 @@ test("P18 registry root scope is bounded and read/write authority is distinct", 
     ownerId: "agent0",
     scope: {
       hive: "HKCU",
+    view: "REGISTRY_64",
       rootKeyPath: "Software\\ToadAid",
       keyPath: "Software\\ToadAid\\Agent",
     },
@@ -647,6 +843,77 @@ test("P18 registry root scope is bounded and read/write authority is distinct", 
   });
   assert.equal(read.capabilityId, "host:registry-read");
   assert.equal(write.capabilityId, "host:registry-write");
+});
+
+test("P18B-P1 host service max wall clock must fit inside remaining P15 lease lifetime", async () => {
+  const request: HostServiceRequest = {
+    ...fileRead(),
+    maxWallClockMs: 60_001,
+  };
+  const ctx = context(request);
+  let calls = 0;
+  const adapter: GovernedHostServiceAdapter = {
+    ...ctx.adapter,
+    async invoke(req) {
+      calls += 1;
+      return ctx.adapter.invoke(req);
+    },
+  };
+  await assert.rejects(
+    invokeGovernedHostService(
+      adapter,
+      ctx.input,
+      {
+        now: () => new Date(NOW),
+        randomId: () => "host-service-lease-too-short",
+      },
+    ),
+    /cannot fit inside remaining P15 lease lifetime/,
+  );
+  assert.equal(calls, 0);
+});
+
+test("P18B-P1 structured host service refuses a lease that also carries its deprecated legacy alias", async () => {
+  const request = fileRead();
+  const ctx = context(request);
+  const mixedLease =
+    createHostConnectorSessionLease(
+      {
+        hostId: "dell7920",
+        sessionId: "host-session-001",
+        ownerId: "agent0",
+        allowedCapabilities: [
+          "host:file-read",
+          "host:filesystem-read",
+        ],
+        connectionConfigSha256:
+          "e".repeat(64),
+        ttlMs: 60_000,
+        createdAt: NOW,
+      },
+      policy("host:session"),
+      { now: () => new Date(NOW) },
+    );
+
+  await assert.rejects(
+    invokeGovernedHostService(
+      ctx.adapter,
+      {
+        ...ctx.input,
+        lease: mixedLease,
+        leaseRuntime: {
+          now: () => new Date(NOW),
+          resolveCurrentLeaseSha256: () =>
+            mixedLease.leaseSha256,
+        },
+      },
+      {
+        now: () => new Date(NOW),
+        randomId: () => "host-service-legacy-alias",
+      },
+    ),
+    /mixes deprecated host:filesystem-read with structured host:file-read/,
+  );
 });
 
 test("P18 clipboard read/write are distinct; adapter gets opaque ref while receipt stays hash-only", async () => {
