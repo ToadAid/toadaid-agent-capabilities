@@ -321,9 +321,9 @@ Checkbox law: mark an item complete only when the implementation is landed on ca
   - typed `REFUSED_BEFORE_DISPATCH` is a safe refusal; failure/transport loss after dispatch begins remains reconciliation-required
   - no provider may silently retarget a changed window/element after preparation
 
-- [ ] **P18B — Host-service identity + containment contracts**
+- [x] **P18B — Host-service identity + containment contracts**
   - [x] **P18B-P1 — Host identity foundations:** governed process-read references for stop, provider generation/evidence namespace binding, explicit registry view, P15 lease-duration containment, and legacy/new alias conflict refusal.
-  - [ ] **P18B-P2 — Execution/content containment:** executable identity + argv profiles, child-process/termination/quiescence bounds, and narrow runtime content resolution for content/value/stdin/environment references.
+  - [x] **P18B-P2 — Execution/content containment:** executable identity + argv profiles, child-process/termination/quiescence bounds, and narrow runtime content resolution for content/value/stdin/environment references.
   - bind `host:process-stop` to a governed `host:process-read` reference carrying receipt/evidence SHA, provider evidence namespace/processRef, and observation time
   - add explicit registry view `REGISTRY_32 | REGISTRY_64`; never inherit worker architecture as authority semantics
   - command/app executable authority binds exact executable identity/hash or trusted allowlisted identity plus capability-specific argv profile; absolute path alone is insufficient

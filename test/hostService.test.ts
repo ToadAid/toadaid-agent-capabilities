@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import test from "node:test";
 
 import {
@@ -21,6 +22,8 @@ import {
 import {
   HOST_SERVICE_CONTRACT_IDS,
   HOST_SERVICE_TOOL_NAMES,
+  createHostArgvProfile,
+  createHostExecutableBinding,
   createHostProcessReference,
   hostServiceAdapterRegistrationSha256,
   hostServiceParametersSha256,
@@ -49,6 +52,26 @@ import type { RunBudgetVector } from "../src/runBudgetTypes.js";
 const NOW = "2026-09-27T04:00:00.000Z";
 const IMPL_SHA = "a".repeat(64);
 const INTENT_SHA = "b".repeat(64);
+
+const CONTENT_BYTES = new Map<string, Uint8Array>([
+  ["blob-ref-001", Buffer.from("hello world\n", "utf8")],
+  ["clipboard-ref-001", Buffer.from("hello world\n", "utf8")],
+  ["registry-value-ref", Buffer.from("test", "utf8")],
+  ["env-ref-lang", Buffer.from("C.UTF-8", "utf8")],
+  ["stdin-ref-001", Buffer.from("input\n", "utf8")],
+]);
+
+function contentSha(ref: string): string {
+  const bytes = CONTENT_BYTES.get(ref);
+  if (bytes === undefined) throw new Error(`missing test content: ${ref}`);
+  return createHash("sha256").update(bytes).digest("hex");
+}
+
+function contentLength(ref: string): number {
+  const bytes = CONTENT_BYTES.get(ref);
+  if (bytes === undefined) throw new Error(`missing test content: ${ref}`);
+  return bytes.byteLength;
+}
 
 function policy(capabilityId: string, allow = true) {
   const layers: readonly CapabilityPolicyLayer[] = allow
@@ -94,10 +117,27 @@ function requiredFeatures(request: HostServiceRequest): readonly string[] {
   if (n.kind === "FILE_READ" || n.kind === "FILE_WRITE") {
     out.push("realpath-scope-enforced");
   }
+  if (
+    n.kind === "CLIPBOARD_WRITE" ||
+    n.kind === "FILE_WRITE" ||
+    n.kind === "REGISTRY_WRITE" ||
+    n.kind === "APP_LAUNCH" ||
+    n.kind === "COMMAND_EXEC"
+  ) {
+    out.push("bounded-content-resolution");
+  }
   if (n.kind === "APP_LAUNCH" || n.kind === "COMMAND_EXEC") {
     out.push(
       "structured-exec-no-shell",
       "structured-exec-explicit-context",
+      "executable-identity-bound",
+      "argv-profile-enforced",
+    );
+  }
+  if (n.kind === "COMMAND_EXEC") {
+    out.push(
+      "bounded-child-process-policy",
+      "confirmed-timeout-quiescence",
     );
   }
   if (n.kind === "PROCESS_STOP") {
@@ -135,8 +175,8 @@ function fileWrite(): HostFileWriteRequest {
       path: "/home/tommy/projects/demo/out.txt",
     },
     contentRef: "blob-ref-001",
-    contentSha256: "6".repeat(64),
-    byteLength: 12,
+    contentSha256: contentSha("blob-ref-001"),
+    byteLength: contentLength("blob-ref-001"),
     mode: "CREATE_NEW",
     maxWallClockMs: 5_000,
   };
@@ -284,6 +324,35 @@ function context(
     );
   }
 
+  let executableBinding = null;
+  let argvProfile = null;
+  if (
+    request.kind === "APP_LAUNCH" ||
+    request.kind === "COMMAND_EXEC"
+  ) {
+    const executableCapabilityId =
+      request.kind === "APP_LAUNCH"
+        ? "host:app-launch"
+        : "host:command-exec";
+    executableBinding = createHostExecutableBinding({
+      capabilityId: executableCapabilityId,
+      executable: request.executable,
+      identityKind: "EXACT_SHA256",
+      executableSha256: "f".repeat(64),
+      argvProfileId: request.argvProfileId,
+    });
+    argvProfile = createHostArgvProfile({
+      profileId: request.argvProfileId,
+      capabilityId: executableCapabilityId,
+      executableBindingSha256: executableBinding.bindingSha256,
+      minArgs: 0,
+      maxArgs: 64,
+      requiredPrefix:
+        request.argv?.slice(0, 1) ?? [],
+      forbiddenExactArgs: ["--toadaid-forbidden"],
+    });
+  }
+
   const lease = createHostConnectorSessionLease(
     {
       hostId: "dell7920",
@@ -309,6 +378,16 @@ function context(
         capabilityId: req.capabilityId,
         evidenceSha256: "1".repeat(64),
         payload: { ok: true },
+        ...(req.capabilityId === "host:command-exec"
+          ? {
+              commandExecution: {
+                completionReason: "EXITED" as const,
+                childProcessCount: 0,
+                terminationRequested: false,
+                quiescenceConfirmed: true,
+              },
+            }
+          : {}),
       };
     },
   };
@@ -347,6 +426,22 @@ function context(
           processRef: string;
         }) =>
           processReferences.get(processRef) ?? null,
+      },
+      contentRuntime: {
+        resolveContent: ({
+          contentRef,
+        }: {
+          contentRef: string;
+        }) => {
+          const bytes = CONTENT_BYTES.get(contentRef);
+          return bytes === undefined
+            ? null
+            : new Uint8Array(bytes);
+        },
+      },
+      executionRuntime: {
+        resolveExecutableBinding: () => executableBinding,
+        resolveArgvProfile: () => argvProfile,
       },
       sessionAuthority: policy("host:session"),
       actionAuthority: policy(capabilityId),
@@ -507,13 +602,14 @@ test("P18 mutations require X1 write classification and uncertain writes reconci
   assert.equal(outcome.reconciliation?.record.status, "OPEN");
 });
 
-test("P18 structured command exec has absolute executable, argv, bounded cwd/env, shell=false and no elevation", () => {
+test("P18B-P2 structured command exec binds argv profile, bounded process policy, cwd/env, shell=false and no elevation", () => {
   const normalized = normalizeHostServiceRequest({
     kind: "COMMAND_EXEC",
     hostId: "dell7920",
     sessionId: "host-session-001",
     ownerId: "agent0",
     executable: "/usr/bin/git",
+    argvProfileId: "git-status-readonly",
     argv: ["status", "--short"],
     cwd: {
       root: "/home/tommy/projects",
@@ -523,12 +619,20 @@ test("P18 structured command exec has absolute executable, argv, bounded cwd/env
       {
         name: "LANG",
         valueRef: "env-ref-lang",
-        valueSha256: "2".repeat(64),
+        valueSha256: contentSha("env-ref-lang"),
+        byteLength: contentLength("env-ref-lang"),
       },
     ],
+    processPolicy: {
+      childProcessPolicy: "FORBID",
+      maxChildProcesses: 0,
+      timeoutTermination: "TERMINATE_PROCESS_TREE",
+      timeoutQuiescence: "REQUIRE_CONFIRMED",
+    },
   });
   const details = normalized.details as Record<string, unknown>;
   assert.equal(details.executable, "/usr/bin/git");
+  assert.equal(details.argvProfileId, "git-status-readonly");
   assert.equal(details.shell, false);
   assert.equal(details.elevation, "NONE");
   assert.equal(details.inheritEnv, false);
@@ -541,9 +645,16 @@ test("P18 structured command exec has absolute executable, argv, bounded cwd/env
         sessionId: "host-session-001",
         ownerId: "agent0",
         executable: "git",
+        argvProfileId: "git-status-readonly",
         cwd: {
           root: "/home/tommy/projects",
           path: "/home/tommy/projects/demo",
+        },
+        processPolicy: {
+          childProcessPolicy: "FORBID",
+          maxChildProcesses: 0,
+          timeoutTermination: "TERMINATE_PROCESS_TREE",
+          timeoutQuiescence: "REQUIRE_CONFIRMED",
         },
       }),
     /explicit absolute path/,
@@ -557,12 +668,42 @@ test("P18 structured command exec has absolute executable, argv, bounded cwd/env
         sessionId: "host-session-001",
         ownerId: "agent0",
         executable: "\\\\server\\share\\tool.exe",
+        argvProfileId: "tool-default",
         cwd: {
           root: "C:\\Users\\Tommy\\Work",
           path: "C:\\Users\\Tommy\\Work\\Demo",
         },
+        processPolicy: {
+          childProcessPolicy: "FORBID",
+          maxChildProcesses: 0,
+          timeoutTermination: "TERMINATE_PROCESS_TREE",
+          timeoutQuiescence: "REQUIRE_CONFIRMED",
+        },
       }),
     /refuses UNC\/device executable paths/,
+  );
+
+  assert.throws(
+    () =>
+      normalizeHostServiceRequest({
+        kind: "COMMAND_EXEC",
+        hostId: "dell7920",
+        sessionId: "host-session-001",
+        ownerId: "agent0",
+        executable: "/usr/bin/git",
+        argvProfileId: "git-status-readonly",
+        cwd: {
+          root: "/home/tommy/projects",
+          path: "/home/tommy/projects/demo",
+        },
+        processPolicy: {
+          childProcessPolicy: "FORBID",
+          maxChildProcesses: 1,
+          timeoutTermination: "TERMINATE_PROCESS_TREE",
+          timeoutQuiescence: "REQUIRE_CONFIRMED",
+        },
+      }),
+    /FORBID child process policy requires maxChildProcesses=0/,
   );
 });
 
@@ -838,8 +979,8 @@ test("P18 registry root scope is bounded and read/write authority is distinct", 
     valueName: "Mode",
     valueType: "STRING",
     valueRef: "registry-value-ref",
-    valueSha256: "4".repeat(64),
-    byteLength: 4,
+    valueSha256: contentSha("registry-value-ref"),
+    byteLength: contentLength("registry-value-ref"),
   });
   assert.equal(read.capabilityId, "host:registry-read");
   assert.equal(write.capabilityId, "host:registry-write");
@@ -916,7 +1057,7 @@ test("P18B-P1 structured host service refuses a lease that also carries its depr
   );
 });
 
-test("P18 clipboard read/write are distinct; adapter gets opaque ref while receipt stays hash-only", async () => {
+test("P18B-P2 clipboard write resolves exact bytes while adapter and receipt stay ref-free", async () => {
   const read = normalizeHostServiceRequest({
     kind: "CLIPBOARD_READ",
     hostId: "dell7920",
@@ -931,8 +1072,8 @@ test("P18 clipboard read/write are distinct; adapter gets opaque ref while recei
     ownerId: "agent0",
     format: "text/plain",
     contentRef: "clipboard-ref-001",
-    contentSha256: "5".repeat(64),
-    byteLength: 12,
+    contentSha256: contentSha("clipboard-ref-001"),
+    byteLength: contentLength("clipboard-ref-001"),
     contentClass: "ORDINARY_TEXT",
   });
   assert.equal(read.capabilityId, "host:clipboard-read");
@@ -946,11 +1087,12 @@ test("P18 clipboard read/write are distinct; adapter gets opaque ref while recei
     ownerId: "agent0",
     format: "text/plain",
     contentRef: "clipboard-ref-001",
-    contentSha256: "5".repeat(64),
-    byteLength: 12,
+    contentSha256: contentSha("clipboard-ref-001"),
+    byteLength: contentLength("clipboard-ref-001"),
     contentClass: "ORDINARY_TEXT",
   };
   let adapterSawRef = false;
+  let adapterSawResolvedBytes = false;
   const ctx = context(
     request,
     "NON_REPLAYABLE",
@@ -958,6 +1100,10 @@ test("P18 clipboard read/write are distinct; adapter gets opaque ref while recei
       async invoke(req) {
         adapterSawRef =
           JSON.stringify(req.parameters).includes("clipboard-ref-001");
+        adapterSawResolvedBytes =
+          req.resolvedContent.length === 1 &&
+          Buffer.from(req.resolvedContent[0]!.bytes).toString("utf8") ===
+            "hello world\n";
         return {
           schemaVersion: "toadaid.host-service-adapter-result.v1",
           operationId: req.operationId,
@@ -978,7 +1124,8 @@ test("P18 clipboard read/write are distinct; adapter gets opaque ref while recei
       randomId: () => "host-service-clipboard-write",
     },
   );
-  assert.equal(adapterSawRef, true);
+  assert.equal(adapterSawRef, false);
+  assert.equal(adapterSawResolvedBytes, true);
   assert.equal(
     JSON.stringify(outcome.receipt).includes("clipboard-ref-001"),
     false,
@@ -1018,14 +1165,30 @@ test("P18 optional read fence must be exact SAFE_READ for the same invocation", 
   );
 });
 
-test("P18 runtime payload preserves write refs and notification text while receipt keeps hashes only", async () => {
+test("P18B-P2 runtime resolves write content while notification text stays runtime-only and receipts stay hash-only", async () => {
+  let writeDispatchParametersSha256 = "";
   const writeCtx = context(
     fileWrite(),
     "NON_REPLAYABLE",
     {
       async invoke(req) {
+        writeDispatchParametersSha256 =
+          req.dispatchParametersSha256;
+        assert.notEqual(
+          req.dispatchParametersSha256,
+          req.parametersSha256,
+        );
         const details = req.parameters.details as Record<string, unknown>;
-        assert.equal(details.contentRef, "blob-ref-001");
+        assert.equal(details.contentRef, undefined);
+        assert.equal(req.resolvedContent.length, 1);
+        assert.equal(
+          Object.isFrozen(req.resolvedContent[0]!),
+          true,
+        );
+        assert.equal(
+          Buffer.from(req.resolvedContent[0]!.bytes).toString("utf8"),
+          "hello world\n",
+        );
         return {
           schemaVersion: "toadaid.host-service-adapter-result.v1",
           operationId: req.operationId,
@@ -1049,6 +1212,14 @@ test("P18 runtime payload preserves write refs and notification text while recei
   assert.equal(
     JSON.stringify(writeOutcome.receipt).includes("blob-ref-001"),
     false,
+  );
+  assert.equal(
+    writeOutcome.receipt.dispatchParametersSha256,
+    writeDispatchParametersSha256,
+  );
+  assert.match(
+    writeOutcome.receipt.dispatchParametersSha256,
+    /^[a-f0-9]{64}$/,
   );
 
   const notification: HostServiceRequest = {
@@ -1091,6 +1262,252 @@ test("P18 runtime payload preserves write refs and notification text while recei
     JSON.stringify(notificationOutcome.receipt).includes("Task finished"),
     false,
   );
+});
+
+test("P18B-P2 executable identity and argv profile are trusted-host bindings, not agent-declared authority", async () => {
+  const request: HostServiceRequest = {
+    kind: "COMMAND_EXEC",
+    hostId: "dell7920",
+    sessionId: "host-session-001",
+    ownerId: "agent0",
+    executable: "/usr/bin/git",
+    argvProfileId: "git-status-readonly",
+    argv: ["status", "--short"],
+    cwd: {
+      root: "/home/tommy/projects",
+      path: "/home/tommy/projects/demo",
+    },
+    processPolicy: {
+      childProcessPolicy: "FORBID",
+      maxChildProcesses: 0,
+      timeoutTermination: "TERMINATE_PROCESS_TREE",
+      timeoutQuiescence: "REQUIRE_CONFIRMED",
+    },
+  };
+  let sawExecutionBinding = false;
+  const ctx = context(
+    request,
+    "NON_REPLAYABLE",
+    {
+      async invoke(req) {
+        sawExecutionBinding =
+          req.executionBinding !== null &&
+          req.executionBinding.executable.executableSha256 === "f".repeat(64) &&
+          req.executionBinding.argvProfile.profileId === "git-status-readonly";
+        return {
+          schemaVersion: "toadaid.host-service-adapter-result.v1",
+          operationId: req.operationId,
+          hostId: req.hostId,
+          sessionId: req.sessionId,
+          capabilityId: req.capabilityId,
+          evidenceSha256: "1".repeat(64),
+          payload: { ok: true },
+          commandExecution: {
+            completionReason: "EXITED",
+            childProcessCount: 0,
+            terminationRequested: false,
+            quiescenceConfirmed: true,
+          },
+        };
+      },
+    },
+  );
+  const outcome = await invokeGovernedHostService(ctx.adapter, ctx.input, {
+    now: () => new Date(NOW),
+    randomId: () => "host-command-bound",
+  });
+  assert.equal(sawExecutionBinding, true);
+  assert.match(outcome.receipt.executionBindingSha256 ?? "", /^[a-f0-9]{64}$/);
+
+  let calls = 0;
+  const adapter: GovernedHostServiceAdapter = {
+    ...ctx.adapter,
+    async invoke(req) {
+      calls += 1;
+      return ctx.adapter.invoke(req);
+    },
+  };
+  await assert.rejects(
+    invokeGovernedHostService(
+      adapter,
+      {
+        ...ctx.input,
+        executionRuntime: {
+          ...ctx.input.executionRuntime,
+          resolveExecutableBinding: () => null,
+        },
+      },
+      {
+        now: () => new Date(NOW),
+        randomId: () => "host-command-no-binding",
+      },
+    ),
+    /current executable identity is unavailable/,
+  );
+  assert.equal(calls, 0);
+});
+
+test("P18B-P2 content resolver SHA mismatch refuses before adapter entry", async () => {
+  const ctx = context(fileWrite(), "NON_REPLAYABLE");
+  let calls = 0;
+  const adapter: GovernedHostServiceAdapter = {
+    ...ctx.adapter,
+    async invoke(req) {
+      calls += 1;
+      return ctx.adapter.invoke(req);
+    },
+  };
+  await assert.rejects(
+    invokeGovernedHostService(
+      adapter,
+      {
+        ...ctx.input,
+        contentRuntime: {
+          resolveContent: () => Buffer.from("wrong-content", "utf8"),
+        },
+      },
+      {
+        now: () => new Date(NOW),
+        randomId: () => "host-content-mismatch",
+      },
+    ),
+    /resolved FILE_WRITE (?:byte length|SHA-256) mismatch/,
+  );
+  assert.equal(calls, 0);
+});
+
+test("P18B-P2 timed-out command requires termination plus confirmed process-tree quiescence", async () => {
+  const request: HostServiceRequest = {
+    kind: "COMMAND_EXEC",
+    hostId: "dell7920",
+    sessionId: "host-session-001",
+    ownerId: "agent0",
+    executable: "/usr/bin/git",
+    argvProfileId: "git-status-readonly",
+    argv: ["status"],
+    cwd: {
+      root: "/home/tommy/projects",
+      path: "/home/tommy/projects/demo",
+    },
+    processPolicy: {
+      childProcessPolicy: "FORBID",
+      maxChildProcesses: 0,
+      timeoutTermination: "TERMINATE_PROCESS_TREE",
+      timeoutQuiescence: "REQUIRE_CONFIRMED",
+    },
+  };
+  const uncertain = context(
+    request,
+    "NON_REPLAYABLE",
+    {
+      async invoke(req) {
+        return {
+          schemaVersion: "toadaid.host-service-adapter-result.v1",
+          operationId: req.operationId,
+          hostId: req.hostId,
+          sessionId: req.sessionId,
+          capabilityId: req.capabilityId,
+          evidenceSha256: "1".repeat(64),
+          commandExecution: {
+            completionReason: "TIMED_OUT",
+            childProcessCount: 0,
+            terminationRequested: false,
+            quiescenceConfirmed: false,
+          },
+        };
+      },
+    },
+  );
+  const uncertainOutcome = await invokeGovernedHostService(
+    uncertain.adapter,
+    uncertain.input,
+    {
+      now: () => new Date(NOW),
+      randomId: () => "host-command-timeout-uncertain",
+    },
+  );
+  assert.equal(uncertainOutcome.receipt.status, "RECONCILIATION_REQUIRED");
+
+  const confirmed = context(
+    request,
+    "NON_REPLAYABLE",
+    {
+      async invoke(req) {
+        return {
+          schemaVersion: "toadaid.host-service-adapter-result.v1",
+          operationId: req.operationId,
+          hostId: req.hostId,
+          sessionId: req.sessionId,
+          capabilityId: req.capabilityId,
+          evidenceSha256: "1".repeat(64),
+          commandExecution: {
+            completionReason: "TIMED_OUT",
+            childProcessCount: 0,
+            terminationRequested: true,
+            quiescenceConfirmed: true,
+          },
+        };
+      },
+    },
+  );
+  const confirmedOutcome = await invokeGovernedHostService(
+    confirmed.adapter,
+    confirmed.input,
+    {
+      now: () => new Date(NOW),
+      randomId: () => "host-command-timeout-confirmed",
+    },
+  );
+  assert.equal(confirmedOutcome.receipt.status, "OK");
+});
+
+test("P18B-P2 command child-process count cannot exceed the declared bounded policy", async () => {
+  const request: HostServiceRequest = {
+    kind: "COMMAND_EXEC",
+    hostId: "dell7920",
+    sessionId: "host-session-001",
+    ownerId: "agent0",
+    executable: "/usr/bin/git",
+    argvProfileId: "git-status-readonly",
+    argv: ["status"],
+    cwd: {
+      root: "/home/tommy/projects",
+      path: "/home/tommy/projects/demo",
+    },
+    processPolicy: {
+      childProcessPolicy: "ALLOW_BOUNDED",
+      maxChildProcesses: 1,
+      timeoutTermination: "TERMINATE_PROCESS_TREE",
+      timeoutQuiescence: "REQUIRE_CONFIRMED",
+    },
+  };
+  const ctx = context(
+    request,
+    "NON_REPLAYABLE",
+    {
+      async invoke(req) {
+        return {
+          schemaVersion: "toadaid.host-service-adapter-result.v1",
+          operationId: req.operationId,
+          hostId: req.hostId,
+          sessionId: req.sessionId,
+          capabilityId: req.capabilityId,
+          evidenceSha256: "1".repeat(64),
+          commandExecution: {
+            completionReason: "EXITED",
+            childProcessCount: 2,
+            terminationRequested: false,
+            quiescenceConfirmed: true,
+          },
+        };
+      },
+    },
+  );
+  const outcome = await invokeGovernedHostService(ctx.adapter, ctx.input, {
+    now: () => new Date(NOW),
+    randomId: () => "host-command-child-overflow",
+  });
+  assert.equal(outcome.receipt.status, "RECONCILIATION_REQUIRED");
 });
 
 test("P18 stale P15 lease refuses before adapter entry", async () => {
@@ -1207,6 +1624,7 @@ test("P18 app-launch and notification are mutations, process/clipboard/file/regi
       ...common,
       kind: "APP_LAUNCH",
       executable: "/usr/bin/xdg-open",
+      argvProfileId: "xdg-open-default",
       cwd: {
         root: "/home/tommy/projects",
         path: "/home/tommy/projects/demo",

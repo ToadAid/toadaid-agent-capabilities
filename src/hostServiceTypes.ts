@@ -62,6 +62,124 @@ export interface HostEnvironmentBinding {
   readonly name: string;
   readonly valueRef: string;
   readonly valueSha256: string;
+  readonly byteLength: number;
+}
+
+export type HostExecutableCapabilityId =
+  | "host:app-launch"
+  | "host:command-exec";
+
+export type HostExecutableIdentityKind =
+  | "EXACT_SHA256"
+  | "TRUSTED_ALLOWLIST";
+
+export interface HostExecutableBinding {
+  readonly schemaVersion:
+    "toadaid.host-executable-binding.v1";
+  readonly capabilityId: HostExecutableCapabilityId;
+  readonly executable: string;
+  readonly identityKind: HostExecutableIdentityKind;
+  readonly executableSha256: string | null;
+  readonly allowlistIdentity: string | null;
+  readonly argvProfileId: string;
+  readonly bindingSha256: string;
+}
+
+export interface HostArgvProfile {
+  readonly schemaVersion:
+    "toadaid.host-argv-profile.v1";
+  readonly profileId: string;
+  readonly capabilityId: HostExecutableCapabilityId;
+  readonly executableBindingSha256: string;
+  readonly minArgs: number;
+  readonly maxArgs: number;
+  readonly requiredPrefix: readonly string[];
+  readonly forbiddenExactArgs: readonly string[];
+  readonly profileSha256: string;
+}
+
+export interface HostExecutionBinding {
+  readonly schemaVersion:
+    "toadaid.host-execution-binding.v1";
+  readonly executable: HostExecutableBinding;
+  readonly argvProfile: HostArgvProfile;
+  readonly argvSha256: string;
+  readonly bindingSha256: string;
+}
+
+export type HostResolvedContentPurpose =
+  | "APP_ENV"
+  | "CLIPBOARD_WRITE"
+  | "FILE_WRITE"
+  | "REGISTRY_WRITE"
+  | "COMMAND_ENV"
+  | "COMMAND_STDIN";
+
+export interface HostResolvedContent {
+  readonly purpose: HostResolvedContentPurpose;
+  readonly name: string | null;
+  readonly refSha256: string;
+  readonly contentSha256: string;
+  readonly byteLength: number;
+  readonly bytes: Uint8Array;
+}
+
+export interface HostServiceContentResolutionRequest {
+  readonly hostId: string;
+  readonly sessionId: string;
+  readonly ownerId: string;
+  readonly capabilityId: HostServiceCapabilityId;
+  readonly purpose: HostResolvedContentPurpose;
+  readonly name: string | null;
+  readonly contentRef: string;
+  readonly expectedSha256: string;
+  readonly expectedByteLength: number;
+  readonly maxBytes: number;
+}
+
+export interface HostServiceContentRuntime {
+  readonly resolveContent: (
+    request: HostServiceContentResolutionRequest,
+  ) => Uint8Array | null;
+}
+
+export interface HostServiceExecutionRuntime {
+  readonly resolveExecutableBinding: (
+    identity: Readonly<{
+      hostId: string;
+      sessionId: string;
+      capabilityId: HostExecutableCapabilityId;
+      executable: string;
+    }>,
+  ) => HostExecutableBinding | null;
+  readonly resolveArgvProfile: (
+    identity: Readonly<{
+      hostId: string;
+      sessionId: string;
+      capabilityId: HostExecutableCapabilityId;
+      profileId: string;
+    }>,
+  ) => HostArgvProfile | null;
+}
+
+export interface HostCommandProcessPolicy {
+  readonly childProcessPolicy:
+    | "FORBID"
+    | "ALLOW_BOUNDED";
+  readonly maxChildProcesses: number;
+  readonly timeoutTermination:
+    "TERMINATE_PROCESS_TREE";
+  readonly timeoutQuiescence:
+    "REQUIRE_CONFIRMED";
+}
+
+export interface HostCommandExecutionEvidence {
+  readonly completionReason:
+    | "EXITED"
+    | "TIMED_OUT";
+  readonly childProcessCount: number;
+  readonly terminationRequested: boolean;
+  readonly quiescenceConfirmed: boolean;
 }
 
 export type HostRegistryHive = "HKCU" | "HKLM";
@@ -124,6 +242,7 @@ interface HostServiceBase {
 export interface HostAppLaunchRequest extends HostServiceBase {
   readonly kind: "APP_LAUNCH";
   readonly executable: string;
+  readonly argvProfileId: string;
   readonly argv?: readonly string[];
   readonly cwd: HostPathScope;
   readonly env?: readonly HostEnvironmentBinding[];
@@ -198,12 +317,15 @@ export interface HostRegistryWriteRequest extends HostServiceBase {
 export interface HostCommandExecRequest extends HostServiceBase {
   readonly kind: "COMMAND_EXEC";
   readonly executable: string;
+  readonly argvProfileId: string;
   readonly argv?: readonly string[];
   readonly cwd: HostPathScope;
   readonly env?: readonly HostEnvironmentBinding[];
   readonly stdinRef?: string;
   readonly stdinSha256?: string;
+  readonly stdinByteLength?: number;
   readonly maxOutputBytes?: number;
+  readonly processPolicy: HostCommandProcessPolicy;
 }
 
 export type HostServiceRequest =
@@ -256,6 +378,10 @@ export interface HostServiceAdapterRequest {
   readonly toolName: string;
   readonly parametersSha256: string;
   readonly actionParametersSha256: string;
+  readonly dispatchParametersSha256: string;
+  readonly executionBinding: HostExecutionBinding | null;
+  readonly resolvedContentSetSha256: string | null;
+  readonly resolvedContent: readonly HostResolvedContent[];
   readonly maxWallClockMs: number;
   readonly parameters: NormalizedHostServiceRequest;
 }
@@ -277,6 +403,7 @@ export interface HostServiceAdapterResult {
   readonly payload?: HostServiceJsonValue;
   readonly payloadRef?: string;
   readonly artifacts?: readonly HostServiceArtifactReference[];
+  readonly commandExecution?: HostCommandExecutionEvidence;
 }
 
 export interface GovernedHostServiceAdapter {
@@ -295,6 +422,8 @@ export interface GovernedHostServiceInput {
   readonly lease: HostConnectorSessionLeaseEnvelope;
   readonly leaseRuntime: HostConnectorSessionUseRuntime;
   readonly evidenceRuntime: HostServiceEvidenceRuntime;
+  readonly contentRuntime: HostServiceContentRuntime;
+  readonly executionRuntime: HostServiceExecutionRuntime;
   readonly sessionAuthority: CapabilityAuthorityDecision;
   readonly actionAuthority: CapabilityAuthorityDecision;
   readonly invocation: CapabilityInvocationEnvelope;
@@ -333,6 +462,9 @@ export interface HostServiceReceipt {
   readonly operationId: string;
   readonly parametersSha256: string;
   readonly actionParametersSha256: string;
+  readonly dispatchParametersSha256: string;
+  readonly executionBindingSha256: string | null;
+  readonly resolvedContentSetSha256: string | null;
   readonly invokedAt: string;
   readonly resultEvidenceSha256: string | null;
   readonly payloadSha256: string | null;

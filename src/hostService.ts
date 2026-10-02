@@ -1,5 +1,5 @@
 import path from "node:path";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 
 import {
   assertCapabilityContractCompatible,
@@ -34,11 +34,21 @@ import type {
   GovernedHostServiceAdapter,
   GovernedHostServiceInput,
   GovernedHostServiceOutcome,
+  HostArgvProfile,
+  HostCommandExecutionEvidence,
+  HostCommandProcessPolicy,
   HostEnvironmentBinding,
+  HostExecutableBinding,
+  HostExecutableCapabilityId,
+  HostExecutionBinding,
   HostPathScope,
   HostProcessReference,
   HostRegistryScope,
+  HostResolvedContent,
+  HostResolvedContentPurpose,
+  HostServiceContentRuntime,
   HostServiceEvidenceRuntime,
+  HostServiceExecutionRuntime,
   HostServiceProviderIdentity,
   HostServiceAdapterRegistration,
   HostServiceAdapterRequest,
@@ -137,6 +147,19 @@ function objectValue(value: unknown, label: string): Record<string, unknown> {
     throw new TypeError(`${label} must be an object`);
   }
   return value as Record<string, unknown>;
+}
+
+function boundedNonNegative(
+  value: number,
+  max: number,
+  label: string,
+): number {
+  if (!Number.isSafeInteger(value) || value < 0 || value > max) {
+    throw new RangeError(
+      `${label} must be an integer in [0, ${max}]`,
+    );
+  }
+  return value;
 }
 
 function boundedPositive(
@@ -302,14 +325,249 @@ function normalizeEnv(
       throw new TypeError(`duplicate environment binding: ${normalizedName}`);
     }
     seen.add(normalizedName);
+    const valueRef = ref(
+      raw.valueRef as string,
+      `env[${index}].valueRef`,
+    );
     return Object.freeze({
       name: normalizedName,
-      valueRef: ref(raw.valueRef as string, `env[${index}].valueRef`),
-      valueSha256: sha(raw.valueSha256 as string, `env[${index}].valueSha256`)!,
+      valueRef,
+      valueRefSha256: sha256(valueRef),
+      valueSha256: sha(
+        raw.valueSha256 as string,
+        `env[${index}].valueSha256`,
+      )!,
+      byteLength: boundedPositive(
+        raw.byteLength as number,
+        1,
+        65_536,
+        `env[${index}].byteLength`,
+      ),
     });
   });
   out.sort((a, b) => a.name.localeCompare(b.name));
   return Object.freeze(out);
+}
+
+function executableCapability(
+  value: string,
+): HostExecutableCapabilityId {
+  const capability = normalizedCapability(value);
+  if (
+    capability !== "host:app-launch" &&
+    capability !== "host:command-exec"
+  ) {
+    throw new TypeError(
+      "executable binding capability must be host:app-launch or host:command-exec",
+    );
+  }
+  return capability;
+}
+
+export function createHostExecutableBinding(
+  input: Readonly<{
+    capabilityId: HostExecutableCapabilityId;
+    executable: string;
+    identityKind:
+      | "EXACT_SHA256"
+      | "TRUSTED_ALLOWLIST";
+    executableSha256?: string;
+    allowlistIdentity?: string;
+    argvProfileId: string;
+  }>,
+): HostExecutableBinding {
+  const capabilityId = executableCapability(input.capabilityId);
+  const executable = normalizeExecutable(input.executable);
+  const argvProfileId = boundedId(input.argvProfileId, "argvProfileId");
+  let executableSha256: string | null = null;
+  let allowlistIdentity: string | null = null;
+  if (input.identityKind === "EXACT_SHA256") {
+    executableSha256 = sha(input.executableSha256, "executableSha256")!;
+    if (input.allowlistIdentity !== undefined) {
+      throw new Error("exact executable binding cannot also carry allowlist identity");
+    }
+  } else if (input.identityKind === "TRUSTED_ALLOWLIST") {
+    allowlistIdentity = boundedId(
+      input.allowlistIdentity as string,
+      "allowlistIdentity",
+    );
+    if (input.executableSha256 !== undefined) {
+      throw new Error("allowlisted executable binding cannot also carry exact hash");
+    }
+  } else {
+    throw new TypeError("unsupported executable identity kind");
+  }
+  const core = Object.freeze({
+    schemaVersion: "toadaid.host-executable-binding.v1" as const,
+    capabilityId,
+    executable,
+    identityKind: input.identityKind,
+    executableSha256,
+    allowlistIdentity,
+    argvProfileId,
+  });
+  return Object.freeze({ ...core, bindingSha256: sha256(core) });
+}
+
+export function normalizeHostExecutableBinding(
+  value: HostExecutableBinding,
+): HostExecutableBinding {
+  const raw = objectValue(value, "host executable binding");
+  if (raw.schemaVersion !== "toadaid.host-executable-binding.v1") {
+    throw new TypeError("unsupported host executable binding schemaVersion");
+  }
+  const capabilityId = executableCapability(raw.capabilityId as string);
+  const executable = normalizeExecutable(raw.executable as string);
+  const identityKind = raw.identityKind;
+  let executableSha256: string | null = null;
+  let allowlistIdentity: string | null = null;
+  if (identityKind === "EXACT_SHA256") {
+    executableSha256 = sha(raw.executableSha256 as string, "executableSha256")!;
+    if (raw.allowlistIdentity !== null) {
+      throw new Error("exact executable binding allowlistIdentity must be null");
+    }
+  } else if (identityKind === "TRUSTED_ALLOWLIST") {
+    allowlistIdentity = boundedId(raw.allowlistIdentity as string, "allowlistIdentity");
+    if (raw.executableSha256 !== null) {
+      throw new Error("allowlisted executable binding executableSha256 must be null");
+    }
+  } else {
+    throw new TypeError("unsupported executable identity kind");
+  }
+  const core = Object.freeze({
+    schemaVersion: "toadaid.host-executable-binding.v1" as const,
+    capabilityId,
+    executable,
+    identityKind,
+    executableSha256,
+    allowlistIdentity,
+    argvProfileId: boundedId(raw.argvProfileId as string, "argvProfileId"),
+  });
+  const bindingSha256 = sha(raw.bindingSha256 as string, "bindingSha256")!;
+  if (bindingSha256 !== sha256(core)) {
+    throw new Error("host executable binding integrity mismatch");
+  }
+  return Object.freeze({ ...core, bindingSha256 });
+}
+
+export function createHostArgvProfile(
+  input: Readonly<{
+    profileId: string;
+    capabilityId: HostExecutableCapabilityId;
+    executableBindingSha256: string;
+    minArgs: number;
+    maxArgs: number;
+    requiredPrefix?: readonly string[];
+    forbiddenExactArgs?: readonly string[];
+  }>,
+): HostArgvProfile {
+  const capabilityId = executableCapability(input.capabilityId);
+  const minArgs = boundedNonNegative(input.minArgs, MAX_ARGV, "argv profile minArgs");
+  const maxArgs = boundedNonNegative(input.maxArgs, MAX_ARGV, "argv profile maxArgs");
+  if (minArgs > maxArgs) {
+    throw new RangeError("argv profile minArgs cannot exceed maxArgs");
+  }
+  const requiredPrefix = normalizeArgv(input.requiredPrefix);
+  if (requiredPrefix.length > maxArgs) {
+    throw new RangeError("argv profile requiredPrefix exceeds maxArgs");
+  }
+  const forbiddenExactArgs = Array.from(
+    new Set(normalizeArgv(input.forbiddenExactArgs)),
+  ).sort();
+  const core = Object.freeze({
+    schemaVersion: "toadaid.host-argv-profile.v1" as const,
+    profileId: boundedId(input.profileId, "argv profileId"),
+    capabilityId,
+    executableBindingSha256: sha(
+      input.executableBindingSha256,
+      "argv executableBindingSha256",
+    )!,
+    minArgs,
+    maxArgs,
+    requiredPrefix,
+    forbiddenExactArgs: Object.freeze(forbiddenExactArgs),
+  });
+  return Object.freeze({ ...core, profileSha256: sha256(core) });
+}
+
+export function normalizeHostArgvProfile(
+  value: HostArgvProfile,
+): HostArgvProfile {
+  const raw = objectValue(value, "host argv profile");
+  if (raw.schemaVersion !== "toadaid.host-argv-profile.v1") {
+    throw new TypeError("unsupported host argv profile schemaVersion");
+  }
+  const minArgs = boundedNonNegative(raw.minArgs as number, MAX_ARGV, "argv profile minArgs");
+  const maxArgs = boundedNonNegative(raw.maxArgs as number, MAX_ARGV, "argv profile maxArgs");
+  if (minArgs > maxArgs) {
+    throw new RangeError("argv profile minArgs cannot exceed maxArgs");
+  }
+  const requiredPrefix = normalizeArgv(raw.requiredPrefix as readonly string[]);
+  const forbiddenExactArgs = Array.from(
+    new Set(normalizeArgv(raw.forbiddenExactArgs as readonly string[])),
+  ).sort();
+  if (requiredPrefix.length > maxArgs) {
+    throw new RangeError("argv profile requiredPrefix exceeds maxArgs");
+  }
+  const core = Object.freeze({
+    schemaVersion: "toadaid.host-argv-profile.v1" as const,
+    profileId: boundedId(raw.profileId as string, "argv profileId"),
+    capabilityId: executableCapability(raw.capabilityId as string),
+    executableBindingSha256: sha(
+      raw.executableBindingSha256 as string,
+      "argv executableBindingSha256",
+    )!,
+    minArgs,
+    maxArgs,
+    requiredPrefix,
+    forbiddenExactArgs: Object.freeze(forbiddenExactArgs),
+  });
+  const profileSha256 = sha(raw.profileSha256 as string, "profileSha256")!;
+  if (profileSha256 !== sha256(core)) {
+    throw new Error("host argv profile integrity mismatch");
+  }
+  return Object.freeze({ ...core, profileSha256 });
+}
+
+function normalizeCommandProcessPolicy(
+  value: HostCommandProcessPolicy,
+): HostServiceJsonValue {
+  const raw = objectValue(value, "command process policy");
+  if (
+    raw.childProcessPolicy !== "FORBID" &&
+    raw.childProcessPolicy !== "ALLOW_BOUNDED"
+  ) {
+    throw new TypeError("command childProcessPolicy is invalid");
+  }
+  const maxChildProcesses = boundedNonNegative(
+    raw.maxChildProcesses as number,
+    32,
+    "maxChildProcesses",
+  );
+  if (raw.childProcessPolicy === "FORBID" && maxChildProcesses !== 0) {
+    throw new Error("FORBID child process policy requires maxChildProcesses=0");
+  }
+  if (raw.childProcessPolicy === "ALLOW_BOUNDED" && maxChildProcesses < 1) {
+    throw new Error("ALLOW_BOUNDED child process policy requires positive maxChildProcesses");
+  }
+  if (
+    raw.timeoutTermination !== "TERMINATE_PROCESS_TREE" ||
+    raw.timeoutQuiescence !== "REQUIRE_CONFIRMED"
+  ) {
+    throw new Error(
+      "command timeout policy must terminate process tree and require confirmed quiescence",
+    );
+  }
+  return Object.freeze({
+    childProcessPolicy: raw.childProcessPolicy,
+    maxChildProcesses,
+    timeoutTermination: "TERMINATE_PROCESS_TREE",
+    timeoutQuiescence: "REQUIRE_CONFIRMED",
+  });
+}
+
+function bytesSha256(bytes: Uint8Array): string {
+  return createHash("sha256").update(bytes).digest("hex");
 }
 
 export function normalizeHostRegistryScope(
@@ -684,6 +942,7 @@ function detailsFor(request: HostServiceRequest): HostServiceJsonValue {
       }
       return Object.freeze({
         executable: normalizeExecutable(request.executable),
+        argvProfileId: boundedId(request.argvProfileId, "argvProfileId"),
         argv: normalizeArgv(request.argv),
         cwd: normalizeHostPathScope(request.cwd),
         env: normalizeEnv(request.env),
@@ -807,9 +1066,13 @@ function detailsFor(request: HostServiceRequest): HostServiceJsonValue {
       }
       if (
         (request.stdinRef === undefined) !==
-        (request.stdinSha256 === undefined)
+          (request.stdinSha256 === undefined) ||
+        (request.stdinRef === undefined) !==
+          (request.stdinByteLength === undefined)
       ) {
-        throw new Error("command stdinRef and stdinSha256 must be provided together");
+        throw new Error(
+          "command stdinRef, stdinSha256, and stdinByteLength must be provided together",
+        );
       }
       {
         const stdinRef =
@@ -818,6 +1081,7 @@ function detailsFor(request: HostServiceRequest): HostServiceJsonValue {
             : ref(request.stdinRef, "stdinRef");
         return Object.freeze({
           executable: normalizeExecutable(request.executable),
+          argvProfileId: boundedId(request.argvProfileId, "argvProfileId"),
           argv: normalizeArgv(request.argv),
           cwd: normalizeHostPathScope(request.cwd),
           env: normalizeEnv(request.env),
@@ -829,6 +1093,15 @@ function detailsFor(request: HostServiceRequest): HostServiceJsonValue {
             request.stdinSha256 === undefined
               ? null
               : sha(request.stdinSha256, "stdinSha256")!,
+          stdinByteLength:
+            request.stdinByteLength === undefined
+              ? null
+              : boundedPositive(
+                  request.stdinByteLength,
+                  1,
+                  4 * 1024 * 1024,
+                  "stdinByteLength",
+                ),
           maxOutputBytes:
             boundedPositive(
               request.maxOutputBytes,
@@ -838,6 +1111,10 @@ function detailsFor(request: HostServiceRequest): HostServiceJsonValue {
             ),
           shell: false,
           elevation: "NONE",
+          processPolicy:
+            normalizeCommandProcessPolicy(
+              request.processPolicy,
+            ),
         });
       }
   }
@@ -883,10 +1160,27 @@ function mandatoryFeatures(
   if (request.kind === "FILE_READ" || request.kind === "FILE_WRITE") {
     features.push("realpath-scope-enforced");
   }
+  if (
+    request.kind === "CLIPBOARD_WRITE" ||
+    request.kind === "FILE_WRITE" ||
+    request.kind === "REGISTRY_WRITE" ||
+    request.kind === "APP_LAUNCH" ||
+    request.kind === "COMMAND_EXEC"
+  ) {
+    features.push("bounded-content-resolution");
+  }
   if (request.kind === "APP_LAUNCH" || request.kind === "COMMAND_EXEC") {
     features.push(
       "structured-exec-no-shell",
       "structured-exec-explicit-context",
+      "executable-identity-bound",
+      "argv-profile-enforced",
+    );
+  }
+  if (request.kind === "COMMAND_EXEC") {
+    features.push(
+      "bounded-child-process-policy",
+      "confirmed-timeout-quiescence",
     );
   }
   if (request.kind === "PROCESS_STOP") {
@@ -1062,6 +1356,316 @@ function assertReplayFence(
   return fence;
 }
 
+function executionBindingFor(
+  request: NormalizedHostServiceRequest,
+  runtime: HostServiceExecutionRuntime,
+): HostExecutionBinding | null {
+  if (request.kind !== "APP_LAUNCH" && request.kind !== "COMMAND_EXEC") {
+    return null;
+  }
+  const details = objectValue(request.details, "execution details");
+  const executable = details.executable;
+  const profileId = details.argvProfileId;
+  const argv = details.argv;
+  if (typeof executable !== "string" || typeof profileId !== "string" || !Array.isArray(argv)) {
+    throw new TypeError("execution details are missing executable/profile/argv");
+  }
+  const capabilityId = request.capabilityId as HostExecutableCapabilityId;
+  const rawBinding = runtime.resolveExecutableBinding({
+    hostId: request.hostId,
+    sessionId: request.sessionId,
+    capabilityId,
+    executable,
+  });
+  if (rawBinding === null) {
+    throw new Error("current executable identity is unavailable");
+  }
+  const executableBinding = normalizeHostExecutableBinding(rawBinding);
+  if (
+    executableBinding.capabilityId !== capabilityId ||
+    executableBinding.executable !== executable ||
+    executableBinding.argvProfileId !== profileId
+  ) {
+    throw new Error("current executable binding does not match requested capability/path/profile");
+  }
+  const rawProfile = runtime.resolveArgvProfile({
+    hostId: request.hostId,
+    sessionId: request.sessionId,
+    capabilityId,
+    profileId,
+  });
+  if (rawProfile === null) {
+    throw new Error("current argv profile is unavailable");
+  }
+  const argvProfile = normalizeHostArgvProfile(rawProfile);
+  if (
+    argvProfile.capabilityId !== capabilityId ||
+    argvProfile.profileId !== profileId ||
+    argvProfile.executableBindingSha256 !== executableBinding.bindingSha256
+  ) {
+    throw new Error("argv profile is stale or not bound to current executable identity");
+  }
+  const normalizedArgv = normalizeArgv(argv as readonly string[]);
+  if (normalizedArgv.length < argvProfile.minArgs || normalizedArgv.length > argvProfile.maxArgs) {
+    throw new Error("argv does not satisfy current bounded argv profile count");
+  }
+  for (let index = 0; index < argvProfile.requiredPrefix.length; index += 1) {
+    if (normalizedArgv[index] !== argvProfile.requiredPrefix[index]) {
+      throw new Error("argv does not satisfy current required prefix");
+    }
+  }
+  for (const arg of normalizedArgv) {
+    if (argvProfile.forbiddenExactArgs.includes(arg)) {
+      throw new Error("argv contains an argument forbidden by current profile");
+    }
+  }
+  const core = Object.freeze({
+    schemaVersion: "toadaid.host-execution-binding.v1" as const,
+    executable: executableBinding,
+    argvProfile,
+    argvSha256: sha256(normalizedArgv),
+  });
+  return Object.freeze({ ...core, bindingSha256: sha256(core) });
+}
+
+interface ContentSpec {
+  readonly purpose: HostResolvedContentPurpose;
+  readonly name: string | null;
+  readonly contentRef: string;
+  readonly contentSha256: string;
+  readonly byteLength: number;
+  readonly maxBytes: number;
+}
+
+function contentSpecsFor(request: HostServiceRequest): readonly ContentSpec[] {
+  const specs: ContentSpec[] = [];
+  const pushEnv = (
+    purpose: "APP_ENV" | "COMMAND_ENV",
+    values: readonly HostEnvironmentBinding[] | undefined,
+  ) => {
+    for (const binding of values ?? []) {
+      specs.push({
+        purpose,
+        name: binding.name.toUpperCase(),
+        contentRef: binding.valueRef,
+        contentSha256: binding.valueSha256,
+        byteLength: binding.byteLength,
+        maxBytes: 65_536,
+      });
+    }
+  };
+  switch (request.kind) {
+    case "APP_LAUNCH":
+      pushEnv("APP_ENV", request.env);
+      break;
+    case "CLIPBOARD_WRITE":
+      specs.push({
+        purpose: "CLIPBOARD_WRITE",
+        name: null,
+        contentRef: request.contentRef,
+        contentSha256: request.contentSha256,
+        byteLength: request.byteLength,
+        maxBytes: 65_536,
+      });
+      break;
+    case "FILE_WRITE":
+      specs.push({
+        purpose: "FILE_WRITE",
+        name: null,
+        contentRef: request.contentRef,
+        contentSha256: request.contentSha256,
+        byteLength: request.byteLength,
+        maxBytes: 16 * 1024 * 1024,
+      });
+      break;
+    case "REGISTRY_WRITE":
+      specs.push({
+        purpose: "REGISTRY_WRITE",
+        name: request.valueName,
+        contentRef: request.valueRef,
+        contentSha256: request.valueSha256,
+        byteLength: request.byteLength,
+        maxBytes: 16 * 1024 * 1024,
+      });
+      break;
+    case "COMMAND_EXEC":
+      pushEnv("COMMAND_ENV", request.env);
+      if (
+        request.stdinRef !== undefined &&
+        request.stdinSha256 !== undefined &&
+        request.stdinByteLength !== undefined
+      ) {
+        specs.push({
+          purpose: "COMMAND_STDIN",
+          name: null,
+          contentRef: request.stdinRef,
+          contentSha256: request.stdinSha256,
+          byteLength: request.stdinByteLength,
+          maxBytes: 4 * 1024 * 1024,
+        });
+      }
+      break;
+    default:
+      break;
+  }
+  return Object.freeze(specs);
+}
+
+function resolveHostContent(
+  request: HostServiceRequest,
+  normalized: NormalizedHostServiceRequest,
+  runtime: HostServiceContentRuntime,
+): Readonly<{
+  resolved: readonly HostResolvedContent[];
+  setSha256: string | null;
+}> {
+  const resolved: HostResolvedContent[] = [];
+  for (const spec of contentSpecsFor(request)) {
+    const contentRef = ref(spec.contentRef, `${spec.purpose}.contentRef`);
+    const expectedSha256 = sha(spec.contentSha256, `${spec.purpose}.contentSha256`)!;
+    const expectedByteLength = boundedPositive(
+      spec.byteLength,
+      1,
+      spec.maxBytes,
+      `${spec.purpose}.byteLength`,
+    );
+    const bytes = runtime.resolveContent({
+      hostId: normalized.hostId,
+      sessionId: normalized.sessionId,
+      ownerId: normalized.ownerId,
+      capabilityId: normalized.capabilityId,
+      purpose: spec.purpose,
+      name: spec.name,
+      contentRef,
+      expectedSha256,
+      expectedByteLength,
+      maxBytes: spec.maxBytes,
+    });
+    if (!(bytes instanceof Uint8Array)) {
+      throw new Error(`host content resolver could not resolve ${spec.purpose}`);
+    }
+    if (bytes.byteLength !== expectedByteLength || bytes.byteLength > spec.maxBytes) {
+      throw new Error(`resolved ${spec.purpose} byte length mismatch`);
+    }
+    if (bytesSha256(bytes) !== expectedSha256) {
+      throw new Error(`resolved ${spec.purpose} SHA-256 mismatch`);
+    }
+    resolved.push(
+      Object.freeze({
+        purpose: spec.purpose,
+        name: spec.name,
+        refSha256: sha256(contentRef),
+        contentSha256: expectedSha256,
+        byteLength: expectedByteLength,
+        bytes: new Uint8Array(bytes),
+      }),
+    );
+  }
+  resolved.sort((a, b) =>
+    `${a.purpose}:${a.name ?? ""}:${a.refSha256}`.localeCompare(
+      `${b.purpose}:${b.name ?? ""}:${b.refSha256}`,
+    ),
+  );
+  const metadata = resolved.map((item) => ({
+    purpose: item.purpose,
+    name: item.name,
+    refSha256: item.refSha256,
+    contentSha256: item.contentSha256,
+    byteLength: item.byteLength,
+  }));
+  return Object.freeze({
+    resolved: Object.freeze(resolved),
+    setSha256: metadata.length === 0 ? null : sha256(metadata),
+  });
+}
+
+function redactContentRefs(
+  request: NormalizedHostServiceRequest,
+): NormalizedHostServiceRequest {
+  const details = objectValue(request.details, "host service details");
+  let sanitized: Record<string, HostServiceJsonValue> = {
+    ...(details as Record<string, HostServiceJsonValue>),
+  };
+  if (request.kind === "CLIPBOARD_WRITE" || request.kind === "FILE_WRITE") {
+    delete sanitized.contentRef;
+  } else if (request.kind === "REGISTRY_WRITE") {
+    delete sanitized.valueRef;
+  } else if (request.kind === "APP_LAUNCH" || request.kind === "COMMAND_EXEC") {
+    const env = Array.isArray(details.env)
+      ? details.env.map((entry) => {
+          const raw = objectValue(entry, "adapter env");
+          const copy: Record<string, HostServiceJsonValue> = {
+            ...(raw as Record<string, HostServiceJsonValue>),
+          };
+          delete copy.valueRef;
+          return Object.freeze(copy);
+        })
+      : [];
+    sanitized = { ...sanitized, env: Object.freeze(env) };
+    if (request.kind === "COMMAND_EXEC") {
+      delete sanitized.stdinRef;
+    }
+  }
+  return Object.freeze({ ...request, details: Object.freeze(sanitized) });
+}
+
+function normalizeCommandExecutionEvidence(
+  value: HostCommandExecutionEvidence | undefined,
+  request: HostServiceAdapterRequest,
+): HostCommandExecutionEvidence | undefined {
+  if (request.parameters.kind !== "COMMAND_EXEC") {
+    if (value !== undefined) {
+      throw new Error("command execution evidence is only valid for COMMAND_EXEC");
+    }
+    return undefined;
+  }
+  if (value === undefined) {
+    throw new Error("COMMAND_EXEC adapter result requires command execution evidence");
+  }
+  const raw = objectValue(value, "command execution evidence");
+  if (raw.completionReason !== "EXITED" && raw.completionReason !== "TIMED_OUT") {
+    throw new TypeError("command completionReason is invalid");
+  }
+  const childProcessCount = boundedNonNegative(
+    raw.childProcessCount as number,
+    32,
+    "childProcessCount",
+  );
+  if (
+    typeof raw.terminationRequested !== "boolean" ||
+    typeof raw.quiescenceConfirmed !== "boolean"
+  ) {
+    throw new TypeError("command termination/quiescence evidence must be boolean");
+  }
+  const details = objectValue(request.parameters.details, "command execution details");
+  const processPolicy = objectValue(details.processPolicy, "command process policy");
+  const maxChildProcesses = processPolicy.maxChildProcesses;
+  if (typeof maxChildProcesses !== "number") {
+    throw new TypeError("command process policy maxChildProcesses is missing");
+  }
+  if (childProcessCount > maxChildProcesses) {
+    throw new Error("command child process count exceeds bounded policy");
+  }
+  if (processPolicy.childProcessPolicy === "FORBID" && childProcessCount !== 0) {
+    throw new Error("command reported a child process under FORBID policy");
+  }
+  if (raw.quiescenceConfirmed !== true) {
+    throw new Error("command execution requires confirmed process-tree quiescence");
+  }
+  if (raw.completionReason === "TIMED_OUT" && raw.terminationRequested !== true) {
+    throw new Error("timed-out command requires process-tree termination request");
+  }
+  if (raw.completionReason === "EXITED" && raw.terminationRequested !== false) {
+    throw new Error("normally exited command cannot claim timeout termination");
+  }
+  return Object.freeze({
+    completionReason: raw.completionReason,
+    childProcessCount,
+    terminationRequested: raw.terminationRequested,
+    quiescenceConfirmed: raw.quiescenceConfirmed,
+  });
+}
+
 function zeroCost(): RunBudgetVector {
   return {
     modelRequests: 0,
@@ -1170,18 +1774,29 @@ function normalizeResult(
   const artifacts = normalizeArtifacts(
     raw.artifacts as readonly HostServiceArtifactReference[] | undefined,
   );
+  const commandExecution = normalizeCommandExecutionEvidence(
+    raw.commandExecution as HostCommandExecutionEvidence | undefined,
+    request,
+  );
   const adapterEvidence = sha(raw.evidenceSha256 as string, "evidenceSha256")!;
   const evidenceSha256 = sha256({
     adapterEvidence,
     operationId: request.operationId,
     parametersSha256: request.parametersSha256,
     actionParametersSha256: request.actionParametersSha256,
+    dispatchParametersSha256:
+      request.dispatchParametersSha256,
+    executionBindingSha256:
+      request.executionBinding?.bindingSha256 ?? null,
+    resolvedContentSetSha256:
+      request.resolvedContentSetSha256,
     hostId: request.hostId,
     sessionId: request.sessionId,
     capabilityId: request.capabilityId,
     payloadSha256: payload === undefined ? null : sha256(payload),
     payloadRefSha256: payloadRef === undefined ? null : sha256(payloadRef),
     artifacts,
+    commandExecution: commandExecution ?? null,
   });
 
   return Object.freeze({
@@ -1194,6 +1809,7 @@ function normalizeResult(
     ...(payload === undefined ? {} : { payload }),
     ...(payloadRef === undefined ? {} : { payloadRef }),
     ...(artifacts.length === 0 ? {} : { artifacts }),
+    ...(commandExecution === undefined ? {} : { commandExecution }),
   });
 }
 
@@ -1284,6 +1900,18 @@ export async function invokeGovernedHostService(
     providerIdentity,
     now,
   );
+  const executionBinding = executionBindingFor(
+    normalized,
+    input.executionRuntime,
+  );
+  const contentResolution = resolveHostContent(
+    input.request,
+    normalized,
+    input.contentRuntime,
+  );
+  const adapterParameters = redactContentRefs(normalized);
+  const dispatchParametersSha256 =
+    sha256(adapterParameters);
 
   const budgetBefore = validateRunBudgetLedgerEnvelope(input.budget);
   if (budgetBefore.record.runId !== invocation.record.runId) {
@@ -1344,8 +1972,12 @@ export async function invokeGovernedHostService(
     toolName: normalized.toolName,
     parametersSha256,
     actionParametersSha256,
+    dispatchParametersSha256,
+    executionBinding,
+    resolvedContentSetSha256: contentResolution.setSha256,
+    resolvedContent: contentResolution.resolved,
     maxWallClockMs: normalized.maxWallClockMs,
-    parameters: normalized,
+    parameters: adapterParameters,
   });
 
   const adapterRegistrationSha256 =
@@ -1380,6 +2012,9 @@ export async function invokeGovernedHostService(
       operationId,
       parametersSha256,
       actionParametersSha256,
+      dispatchParametersSha256,
+      executionBindingSha256: executionBinding?.bindingSha256 ?? null,
+      resolvedContentSetSha256: contentResolution.setSha256,
       invokedAt,
       resultEvidenceSha256: result.evidenceSha256,
       payloadSha256:
@@ -1454,6 +2089,9 @@ export async function invokeGovernedHostService(
         operationId,
         parametersSha256,
         actionParametersSha256,
+        dispatchParametersSha256,
+        executionBindingSha256: executionBinding?.bindingSha256 ?? null,
+        resolvedContentSetSha256: contentResolution.setSha256,
         invokedAt,
         resultEvidenceSha256: null,
         payloadSha256: null,
@@ -1504,6 +2142,9 @@ export async function invokeGovernedHostService(
       operationId,
       parametersSha256,
       actionParametersSha256,
+      dispatchParametersSha256,
+      executionBindingSha256: executionBinding?.bindingSha256 ?? null,
+      resolvedContentSetSha256: contentResolution.setSha256,
       invokedAt,
       resultEvidenceSha256: null,
       payloadSha256: null,
