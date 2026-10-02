@@ -674,3 +674,4 @@ export type {
   CreateCapabilityProviderHealthReportInput,
   GovernedCapabilityRuntimeProvider,
 } from "./capabilityProviderRegistryTypes.js";
+export * from "./securityAudit.js";

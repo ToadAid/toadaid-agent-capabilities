@@ -350,7 +350,7 @@ Checkbox law: mark an item complete only when the implementation is landed on ca
 
 > Research source: `cloudflare/security-audit-skill`. Adopt the useful security-audit workflow as a governed ToadAid capability rather than granting an external skill ambient authority.
 
-- [ ] **SEC1 — Security audit evidence + threat-model contract**
+- [x] **SEC1 — Security audit evidence + threat-model contract**
   - bind each audit to exact repository identity, source revision/tree SHA, declared scope, configuration/rule-set fingerprint, and run identity
   - reconnaissance produces a bounded architecture/trust-boundary snapshot before hunting begins
   - derive target-specific attack classes from the repository instead of assuming one generic checklist is complete
