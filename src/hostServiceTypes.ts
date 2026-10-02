@@ -9,7 +9,10 @@ import type {
   HostConnectorSessionLeaseEnvelope,
   HostConnectorSessionUseRuntime,
 } from "./hostConnectorSessionLeaseTypes.js";
-import type { CapabilityInvocationEnvelope } from "./invocationTypes.js";
+import type {
+  CapabilityInvocationEnvelope,
+  CapabilityInvocationHeadRuntime,
+} from "./invocationTypes.js";
 import type {
   ReplayFenceEnvelope,
   ReplayReconciliationEnvelope,
@@ -426,6 +429,7 @@ export interface GovernedHostServiceInput {
   readonly executionRuntime: HostServiceExecutionRuntime;
   readonly sessionAuthority: CapabilityAuthorityDecision;
   readonly actionAuthority: CapabilityAuthorityDecision;
+  readonly invocationHeadRuntime: CapabilityInvocationHeadRuntime;
   readonly invocation: CapabilityInvocationEnvelope;
   readonly contractBinding: CapabilityInvocationContractBinding;
   readonly contractReady: CapabilityInvocationContractReadyReceipt;
@@ -446,6 +450,7 @@ export interface HostServiceReceipt {
   readonly status: HostServiceStatus;
   readonly capabilityId: HostServiceCapabilityId;
   readonly invocationId: string;
+  readonly invocationRecordSha256: string;
   readonly intentSha256: string;
   readonly runId: string;
   readonly hostId: string;
@@ -482,6 +487,7 @@ export interface HostServiceReceipt {
 }
 
 export interface GovernedHostServiceOutcome {
+  readonly invocation: CapabilityInvocationEnvelope;
   readonly receipt: HostServiceReceipt;
   readonly budget: RunBudgetLedgerEnvelope;
   readonly result: HostServiceAdapterResult | null;

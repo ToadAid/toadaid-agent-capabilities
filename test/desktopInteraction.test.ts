@@ -450,6 +450,38 @@ function makeContext(
       },
     });
 
+  let currentInvocation = invocation;
+  const invocationHeadRuntime = {
+    resolveCurrentInvocationHead(
+      identity: Readonly<{
+        runId: string;
+        invocationId: string;
+      }>,
+    ) {
+      if (
+        identity.runId !== currentInvocation.record.runId ||
+        identity.invocationId !==
+          currentInvocation.record.invocationId
+      ) {
+        return null;
+      }
+      return currentInvocation;
+    },
+    claimCurrentInvocationHead(
+      expected: typeof invocation,
+      next: typeof invocation,
+    ) {
+      if (
+        currentInvocation.recordSha256 !==
+        expected.recordSha256
+      ) {
+        return false;
+      }
+      currentInvocation = next;
+      return true;
+    },
+  };
+
   const contractBinding =
     createCapabilityInvocationContractBinding(
       invocation,
@@ -553,6 +585,7 @@ function makeContext(
     requirement,
     compatibility,
     invocation,
+    invocationHeadRuntime,
     replayFence,
     contractBinding,
     contractReady,
@@ -571,6 +604,7 @@ function makeContext(
         observation.observationHeadRuntime,
       sessionAuthority: policy("host:session"),
       actionAuthority: policy(capabilityId),
+      invocationHeadRuntime,
       invocation,
       contractBinding,
       contractReady,
@@ -620,6 +654,11 @@ test("P17 successful element click crosses P15/P3/C1/H1/X1/Q1 and invalidates th
   );
 
   assert.equal(outcome.receipt.status, "OK");
+  assert.equal(outcome.invocation.record.status, "STARTED");
+  assert.equal(
+    outcome.receipt.invocationRecordSha256,
+    outcome.invocation.recordSha256,
+  );
   assert.equal(
     outcome.receipt.capabilityId,
     "host:pointer-click",
@@ -1116,6 +1155,46 @@ test("P17 requires NON_REPLAYABLE X1 classification before adapter entry", async
   assert.equal(calls, 0);
 });
 
+test("H1/X1B-P2 desktop refuses backward dispatch time before mutation entry", async () => {
+  const ctx = makeContext(clickRequest());
+  let dispatchCalls = 0;
+  const adapter: GovernedDesktopInteractionAdapter = {
+    ...ctx.adapter,
+    async dispatch(request) {
+      dispatchCalls += 1;
+      return ctx.adapter.dispatch!(request);
+    },
+  };
+  const times = [
+    NOW,
+    NOW,
+    "2026-09-27T03:09:59.999Z",
+  ];
+  let index = 0;
+
+  await assert.rejects(
+    interactGovernedDesktop(
+      adapter,
+      ctx.input,
+      {
+        now: () =>
+          new Date(
+            times[Math.min(index++, times.length - 1)]!,
+          ),
+        randomId: () => "interaction-time-regression",
+      },
+    ),
+    (error: unknown) => {
+      assert.equal(
+        (error as { reasonCode?: string }).reasonCode,
+        "H1_TIME_REGRESSION",
+      );
+      return true;
+    },
+  );
+  assert.equal(dispatchCalls, 0);
+});
+
 test("P17 adapter throw after entry opens X1 reconciliation instead of retrying", async () => {
   const ctx = makeContext(
     clickRequest(),
@@ -1141,6 +1220,24 @@ test("P17 adapter throw after entry opens X1 reconciliation instead of retrying"
     "RECONCILIATION_REQUIRED",
   );
   assert.equal(
+    outcome.invocation.record.status,
+    "RECONCILIATION_REQUIRED",
+  );
+  assert.equal(
+    outcome.receipt.invocationRecordSha256,
+    outcome.invocation.recordSha256,
+  );
+  assert.equal(
+    outcome.invocation.record.reconciliation
+      ?.openReconciliationSha256,
+    outcome.reconciliation?.recordSha256,
+  );
+  assert.equal(
+    outcome.invocation.record.continuity
+      .previousRecordSha256,
+    ctx.invocation.recordSha256,
+  );
+  assert.equal(
     outcome.reconciliation?.record.status,
     "OPEN",
   );
@@ -1153,6 +1250,28 @@ test("P17 adapter throw after entry opens X1 reconciliation instead of retrying"
     "NON_REPLAYABLE",
   );
   assert.equal(outcome.result, null);
+
+  let staleDispatchCalls = 0;
+  const staleAdapter: GovernedDesktopInteractionAdapter = {
+    ...ctx.adapter,
+    async dispatch(request) {
+      staleDispatchCalls += 1;
+      return ctx.adapter.dispatch!(request);
+    },
+  };
+  await assert.rejects(
+    interactGovernedDesktop(
+      staleAdapter,
+      ctx.input,
+      {
+        now: () => new Date(NOW),
+        randomId: () =>
+          "interaction-stale-h1-reuse",
+      },
+    ),
+    /stale relative to current H1 head/,
+  );
+  assert.equal(staleDispatchCalls, 0);
 });
 
 test("P17 malformed post-entry result also requires reconciliation", async () => {

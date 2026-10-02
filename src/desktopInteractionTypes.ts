@@ -20,6 +20,7 @@ import type {
 } from "./hostConnectorSessionLeaseTypes.js";
 import type {
   CapabilityInvocationEnvelope,
+  CapabilityInvocationHeadRuntime,
 } from "./invocationTypes.js";
 import type {
   ReplayFenceEnvelope,
@@ -327,6 +328,7 @@ export interface GovernedDesktopInteractionInput {
   readonly observationHeadRuntime: DesktopObservationHeadRuntime;
   readonly sessionAuthority: CapabilityAuthorityDecision;
   readonly actionAuthority: CapabilityAuthorityDecision;
+  readonly invocationHeadRuntime: CapabilityInvocationHeadRuntime;
   readonly invocation: CapabilityInvocationEnvelope;
   readonly contractBinding: CapabilityInvocationContractBinding;
   readonly contractReady: CapabilityInvocationContractReadyReceipt;
@@ -355,6 +357,7 @@ export interface DesktopInteractionReceipt {
   readonly status: DesktopInteractionStatus;
   readonly capabilityId: DesktopInteractionCapabilityId;
   readonly invocationId: string;
+  readonly invocationRecordSha256: string;
   readonly intentSha256: string;
   readonly runId: string;
   readonly hostId: string;
@@ -384,6 +387,7 @@ export interface DesktopInteractionReceipt {
 }
 
 export interface GovernedDesktopInteractionOutcome {
+  readonly invocation: CapabilityInvocationEnvelope;
   readonly receipt: DesktopInteractionReceipt;
   readonly budget: RunBudgetLedgerEnvelope;
   readonly result: DesktopInteractionAdapterResult | null;

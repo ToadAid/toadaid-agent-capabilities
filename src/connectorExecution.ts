@@ -2,9 +2,13 @@ export type * from "./connectorExecutionTypes.js";
 
 import { invokeGovernedConnectorAdapter } from "./connectorAdapter.js";
 import { validateCapabilityInvocationEnvelope } from "./capabilityInvocationRecord.js";
+import {
+  assertCurrentCapabilityInvocationHead,
+  beginCapabilityInvocationReconciliation,
+  publishCapabilityInvocationReconciliationHead,
+} from "./invocationReconciliation.js";
 import { sha256 } from "./invocationSchema.js";
 import {
-  openReplayReconciliation,
   validateReplayFenceEnvelope,
 } from "./replayFence.js";
 import {
@@ -105,19 +109,50 @@ export async function executeGovernedConnectorInvocation(
   runtime?: GovernedConnectorExecutionRuntime,
 ): Promise<GovernedConnectorExecutionOutcome> {
   const invocation = validateCapabilityInvocationEnvelope(input.invocation);
+  assertCurrentCapabilityInvocationHead(
+    input.invocationHeadRuntime,
+    invocation,
+  );
   const fence = assertReplayFenceMatchesInvocation(input);
   const reconciliationMetadata = validateReconciliationMetadata(input);
+  const reconciliationId =
+    reconciliationMetadata.reconciliationId ??
+    boundedId(
+      `recon-${sha256({
+        invocationRecordSha256: invocation.recordSha256,
+        replayFenceSha256: fence.recordSha256,
+      }).slice(0, 32)}`,
+      "reconciliationId",
+    );
 
   let adapterEntered = false;
+  let dispatchBoundaryAt: string | null = null;
   const trackedAdapter: GovernedConnectorAdapter = Object.freeze({
     registration: adapter.registration,
     invoke(request: ConnectorAdapterInvocationRequest) {
+      const openedAt =
+        reconciliationMetadata.openedAt ??
+        canonicalIso(
+          undefined,
+          "openedAt",
+          runtime?.now ?? (() => new Date()),
+        );
+      if (
+        Date.parse(openedAt) <
+        Date.parse(invocation.record.updatedAt)
+      ) {
+        throw new RangeError(
+          "connector reconciliation openedAt is earlier than active H1 predecessor",
+        );
+      }
+      dispatchBoundaryAt = openedAt;
       adapterEntered = true;
       return adapter.invoke(request);
     },
   });
 
   const {
+    invocationHeadRuntime: _invocationHeadRuntime,
     replayFence: _replayFence,
     reconciliationId: _reconciliationId,
     openedAt: _openedAt,
@@ -134,34 +169,53 @@ export async function executeGovernedConnectorInvocation(
       schemaVersion: "toadaid.connector-execution-outcome.v1",
       status: "SUCCEEDED",
       replayFenceSha256: fence.recordSha256,
+      invocationRecordSha256: invocation.recordSha256,
+      invocation,
       adapterReceiptSha256: sha256(invocationResult.receipt),
       invocationResult,
     });
   } catch (error) {
     if (!adapterEntered) throw error;
 
+    if (dispatchBoundaryAt === null) {
+      throw new Error(
+        "connector uncertain outcome is missing prebound dispatch boundary",
+      );
+    }
     const errorClass = normalizedErrorClass(error);
     const errorFingerprintSha256 = connectorErrorFingerprint(error);
-    const reconciliation = openReplayReconciliation(
-      fence,
+    const opened =
+      beginCapabilityInvocationReconciliation(
+        fence,
+        invocation,
+        {
+          reconciliationId,
+          reasonCode: "CONNECTOR_OUTCOME_UNKNOWN",
+          evidenceRefs: Object.freeze([
+            Object.freeze({
+              id: "connector-error",
+              sha256: errorFingerprintSha256,
+            }),
+          ]),
+          openedAt: dispatchBoundaryAt,
+        },
+        runtime,
+      );
+    publishCapabilityInvocationReconciliationHead(
+      input.invocationHeadRuntime,
       invocation,
-      {
-        ...reconciliationMetadata,
-        reasonCode: "CONNECTOR_OUTCOME_UNKNOWN",
-        evidenceRefs: Object.freeze([
-          Object.freeze({
-            id: "connector-error",
-            sha256: errorFingerprintSha256,
-          }),
-        ]),
-      },
-      runtime,
+      opened,
     );
+    const reconciliation = opened.reconciliation;
+    const lockedInvocation = opened.invocation;
 
     return Object.freeze({
       schemaVersion: "toadaid.connector-execution-outcome.v1",
       status: "RECONCILIATION_REQUIRED",
       replayFenceSha256: fence.recordSha256,
+      invocationRecordSha256:
+        lockedInvocation.recordSha256,
+      invocation: lockedInvocation,
       errorClass,
       errorFingerprintSha256,
       reconciliation,

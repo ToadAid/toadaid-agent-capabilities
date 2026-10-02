@@ -280,6 +280,38 @@ function context(
     },
   });
 
+  let currentInvocation = invocation;
+  const invocationHeadRuntime = {
+    resolveCurrentInvocationHead(
+      identity: Readonly<{
+        runId: string;
+        invocationId: string;
+      }>,
+    ) {
+      if (
+        identity.runId !== currentInvocation.record.runId ||
+        identity.invocationId !==
+          currentInvocation.record.invocationId
+      ) {
+        return null;
+      }
+      return currentInvocation;
+    },
+    claimCurrentInvocationHead(
+      expected: typeof invocation,
+      next: typeof invocation,
+    ) {
+      if (
+        currentInvocation.recordSha256 !==
+        expected.recordSha256
+      ) {
+        return false;
+      }
+      currentInvocation = next;
+      return true;
+    },
+  };
+
   const binding =
     createCapabilityInvocationContractBinding(
       invocation,
@@ -411,6 +443,8 @@ function context(
     replayFence,
     adapter,
     budget,
+    invocation,
+    invocationHeadRuntime,
     input: {
       lease,
       leaseRuntime: {
@@ -445,6 +479,7 @@ function context(
       },
       sessionAuthority: policy("host:session"),
       actionAuthority: policy(capabilityId),
+      invocationHeadRuntime,
       invocation,
       contractBinding: binding,
       contractReady,
@@ -599,7 +634,79 @@ test("P18 mutations require X1 write classification and uncertain writes reconci
     },
   );
   assert.equal(outcome.receipt.status, "RECONCILIATION_REQUIRED");
+  assert.equal(
+    outcome.invocation.record.status,
+    "RECONCILIATION_REQUIRED",
+  );
+  assert.equal(
+    outcome.receipt.invocationRecordSha256,
+    outcome.invocation.recordSha256,
+  );
+  assert.equal(
+    outcome.invocation.record.reconciliation
+      ?.openReconciliationSha256,
+    outcome.reconciliation?.recordSha256,
+  );
+  assert.equal(
+    outcome.invocation.record.continuity
+      .previousRecordSha256,
+    uncertain.input.invocation.recordSha256,
+  );
   assert.equal(outcome.reconciliation?.record.status, "OPEN");
+
+  let staleCalls = 0;
+  const staleAdapter: GovernedHostServiceAdapter = {
+    ...uncertain.adapter,
+    async invoke(request) {
+      staleCalls += 1;
+      return uncertain.adapter.invoke(request);
+    },
+  };
+  await assert.rejects(
+    invokeGovernedHostService(
+      staleAdapter,
+      uncertain.input,
+      {
+        now: () => new Date(NOW),
+        randomId: () =>
+          "host-service-stale-h1-reuse",
+      },
+    ),
+    /stale relative to current H1 head/,
+  );
+  assert.equal(staleCalls, 0);
+});
+
+test("H1/X1B-P2 host service refuses backward invocation time before adapter entry", async () => {
+  const ctx = context(
+    fileWrite(),
+    "NON_REPLAYABLE",
+  );
+  let calls = 0;
+  const adapter: GovernedHostServiceAdapter = {
+    ...ctx.adapter,
+    async invoke(request) {
+      calls += 1;
+      return ctx.adapter.invoke(request);
+    },
+  };
+
+  await assert.rejects(
+    invokeGovernedHostService(
+      adapter,
+      ctx.input,
+      {
+        now: () =>
+          new Date(
+            "2026-09-27T03:59:59.999Z",
+          ),
+        randomId: () =>
+          "host-service-time-regression",
+      },
+    ),
+    /earlier than active H1 predecessor/,
+  );
+  assert.equal(calls, 0);
 });
 
 test("P18B-P2 structured command exec binds argv profile, bounded process policy, cwd/env, shell=false and no elevation", () => {

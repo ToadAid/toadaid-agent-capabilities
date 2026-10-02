@@ -27,7 +27,11 @@ import {
   toolName,
 } from "./invocationSchema.js";
 import {
-  openReplayReconciliation,
+  assertCurrentCapabilityInvocationHead,
+  beginCapabilityInvocationReconciliation,
+  publishCapabilityInvocationReconciliationHead,
+} from "./invocationReconciliation.js";
+import {
   validateReplayFenceEnvelope,
 } from "./replayFence.js";
 import {
@@ -1615,6 +1619,10 @@ export async function interactGovernedDesktop(
       normalized,
       registration,
     );
+  assertCurrentCapabilityInvocationHead(
+    input.invocationHeadRuntime,
+    invocation,
+  );
   const fence = assertReplayFence(
     input.replayFence,
     invocation,
@@ -1778,6 +1786,14 @@ export async function interactGovernedDesktop(
       "desktop interaction dispatch time is invalid",
     );
   }
+  if (
+    dispatchNow.getTime() <
+    Date.parse(invocation.record.updatedAt)
+  ) {
+    throw new DesktopInteractionRefusedBeforeDispatchError(
+      "H1_TIME_REGRESSION",
+    );
+  }
 
   assertDesktopInteractionPreparationCurrent(
     preparationTicket,
@@ -1828,6 +1844,13 @@ export async function interactGovernedDesktop(
   const dispatchedAt = canonicalIso(
     dispatchNow.toISOString(),
     "dispatchedAt",
+  );
+  const reconciliationId = boundedId(
+    `recon-${sha256({
+      invocationRecordSha256: invocation.recordSha256,
+      interactionEpoch,
+    }).slice(0, 32)}`,
+    "reconciliationId",
   );
 
   // Read-only provider preparation is over. Mutation can begin only after the
@@ -1913,6 +1936,8 @@ export async function interactGovernedDesktop(
       capabilityId: normalized.capabilityId,
       invocationId:
         invocation.record.invocationId,
+      invocationRecordSha256:
+        invocation.recordSha256,
       intentSha256:
         invocation.record.request.intentSha256,
       runId: invocation.record.runId,
@@ -1959,17 +1984,19 @@ export async function interactGovernedDesktop(
       receiptSha256: receiptSha256(core),
     });
     return Object.freeze({
+      invocation,
       receipt,
       budget: budgetAfter,
       result,
       reconciliation: null,
     });
   } catch (error) {
-    const reconciliation =
-      openReplayReconciliation(
+    const opened =
+      beginCapabilityInvocationReconciliation(
         fence,
         invocation,
         {
+          reconciliationId,
           reasonCode:
             "DESKTOP_INTERACTION_UNCERTAIN",
           evidenceRefs: [
@@ -1994,6 +2021,13 @@ export async function interactGovernedDesktop(
             : {}),
         },
       );
+    publishCapabilityInvocationReconciliationHead(
+      input.invocationHeadRuntime,
+      invocation,
+      opened,
+    );
+    const reconciliation = opened.reconciliation;
+    const lockedInvocation = opened.invocation;
 
     const core = Object.freeze({
       schemaVersion:
@@ -2003,6 +2037,8 @@ export async function interactGovernedDesktop(
       capabilityId: normalized.capabilityId,
       invocationId:
         invocation.record.invocationId,
+      invocationRecordSha256:
+        lockedInvocation.recordSha256,
       intentSha256:
         invocation.record.request.intentSha256,
       runId: invocation.record.runId,
@@ -2048,6 +2084,7 @@ export async function interactGovernedDesktop(
       receiptSha256: receiptSha256(core),
     });
     return Object.freeze({
+      invocation: lockedInvocation,
       receipt,
       budget: budgetAfter,
       result: null,

@@ -14,6 +14,7 @@ import {
 import type {
   CapabilityInvocationEnvelope,
   CapabilityInvocationExecutionTruth,
+  CapabilityInvocationHeadRuntime,
   CapabilityInvocationTransitionRuntime,
 } from "./invocationTypes.js";
 import type {
@@ -28,6 +29,100 @@ export interface OpenCapabilityInvocationReconciliationResult {
     "toadaid.capability-invocation-reconciliation-open.v1";
   readonly invocation: CapabilityInvocationEnvelope;
   readonly reconciliation: ReplayReconciliationEnvelope;
+}
+
+export class CapabilityInvocationHeadConflictError extends Error {
+  readonly status = "RECONCILIATION_REQUIRED" as const;
+  readonly invocation: CapabilityInvocationEnvelope;
+  readonly reconciliation: ReplayReconciliationEnvelope;
+
+  constructor(
+    invocation: CapabilityInvocationEnvelope,
+    reconciliation: ReplayReconciliationEnvelope,
+  ) {
+    super(
+      "current H1 head changed after external dispatch; reconciliation publication conflict",
+    );
+    this.name = "CapabilityInvocationHeadConflictError";
+    this.invocation = invocation;
+    this.reconciliation = reconciliation;
+  }
+}
+
+export function assertCurrentCapabilityInvocationHead(
+  runtime: CapabilityInvocationHeadRuntime,
+  invocationInput: CapabilityInvocationEnvelope,
+): CapabilityInvocationEnvelope {
+  const invocation =
+    validateCapabilityInvocationEnvelope(invocationInput);
+  const current = runtime.resolveCurrentInvocationHead({
+    runId: invocation.record.runId,
+    invocationId: invocation.record.invocationId,
+  });
+  if (current === null) {
+    throw new Error("current H1 head is unavailable");
+  }
+  const validatedCurrent =
+    validateCapabilityInvocationEnvelope(current);
+  if (
+    validatedCurrent.record.runId !== invocation.record.runId ||
+    validatedCurrent.record.invocationId !==
+      invocation.record.invocationId
+  ) {
+    throw new Error("current H1 head identity mismatch");
+  }
+  if (
+    validatedCurrent.recordSha256 !==
+    invocation.recordSha256
+  ) {
+    throw new Error(
+      "capability invocation is stale relative to current H1 head",
+    );
+  }
+  return validatedCurrent;
+}
+
+export function publishCapabilityInvocationReconciliationHead(
+  runtime: CapabilityInvocationHeadRuntime,
+  previousInput: CapabilityInvocationEnvelope,
+  opened: OpenCapabilityInvocationReconciliationResult,
+): void {
+  const previous =
+    validateCapabilityInvocationEnvelope(previousInput);
+  const next =
+    validateCapabilityInvocationEnvelope(opened.invocation);
+  if (
+    next.record.status !== "RECONCILIATION_REQUIRED" ||
+    next.record.continuity.previousRecordSha256 !==
+      previous.recordSha256
+  ) {
+    throw new Error(
+      "H1 reconciliation successor does not continue expected current head",
+    );
+  }
+
+  if (
+    runtime.claimCurrentInvocationHead(previous, next)
+  ) {
+    return;
+  }
+
+  const current = runtime.resolveCurrentInvocationHead({
+    runId: previous.record.runId,
+    invocationId: previous.record.invocationId,
+  });
+  if (
+    current !== null &&
+    validateCapabilityInvocationEnvelope(current)
+      .recordSha256 === next.recordSha256
+  ) {
+    return;
+  }
+
+  throw new CapabilityInvocationHeadConflictError(
+    next,
+    opened.reconciliation,
+  );
 }
 
 function closeoutNow(

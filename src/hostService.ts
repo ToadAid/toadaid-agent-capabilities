@@ -22,7 +22,11 @@ import {
   toolName,
 } from "./invocationSchema.js";
 import {
-  openReplayReconciliation,
+  assertCurrentCapabilityInvocationHead,
+  beginCapabilityInvocationReconciliation,
+  publishCapabilityInvocationReconciliationHead,
+} from "./invocationReconciliation.js";
+import {
   validateReplayFenceEnvelope,
 } from "./replayFence.js";
 import {
@@ -1866,6 +1870,10 @@ export async function invokeGovernedHostService(
 
   const { invocation, binding, compatibility } =
     assertC1H1(input, normalized, registration);
+  assertCurrentCapabilityInvocationHead(
+    input.invocationHeadRuntime,
+    invocation,
+  );
   const providerIdentity = currentProviderIdentity(
     input.evidenceRuntime,
     normalized.hostId,
@@ -1888,6 +1896,14 @@ export async function invokeGovernedHostService(
   const now = (runtime.now ?? (() => new Date()))();
   if (!(now instanceof Date) || Number.isNaN(now.getTime())) {
     throw new TypeError("host service runtime now is invalid");
+  }
+  if (
+    now.getTime() <
+    Date.parse(invocation.record.updatedAt)
+  ) {
+    throw new RangeError(
+      "host service invocation time is earlier than active H1 predecessor",
+    );
   }
   assertLeaseDurationFitsOperation(
     leaseBinding.expiresAt,
@@ -1936,6 +1952,13 @@ export async function invokeGovernedHostService(
   const invokedAt = canonicalIso(
     now.toISOString(),
     "invokedAt",
+  );
+  const reconciliationId = boundedId(
+    `recon-${sha256({
+      invocationRecordSha256: invocation.recordSha256,
+      operationId,
+    }).slice(0, 32)}`,
+    "reconciliationId",
   );
   const budgetAfter = recordRunBudgetUsage(
     budgetBefore,
@@ -1993,6 +2016,7 @@ export async function invokeGovernedHostService(
       status: "OK" as const,
       capabilityId: normalized.capabilityId,
       invocationId: invocation.record.invocationId,
+      invocationRecordSha256: invocation.recordSha256,
       intentSha256: invocation.record.request.intentSha256,
       runId: invocation.record.runId,
       hostId: normalized.hostId,
@@ -2037,6 +2061,7 @@ export async function invokeGovernedHostService(
       receiptSha256: receiptSha256(core),
     });
     return Object.freeze({
+      invocation,
       receipt,
       budget: budgetAfter,
       result,
@@ -2047,29 +2072,40 @@ export async function invokeGovernedHostService(
       if (replayFence === null) {
         throw new Error("mutating host service lost X1 replay fence");
       }
-      const reconciliation = openReplayReconciliation(
-        replayFence,
+      const opened =
+        beginCapabilityInvocationReconciliation(
+          replayFence,
+          invocation,
+          {
+            reconciliationId,
+            reasonCode: "HOST_SERVICE_OUTCOME_UNCERTAIN",
+            evidenceRefs: [
+              {
+                id: "host-service-action",
+                sha256: actionParametersSha256,
+              },
+            ],
+            openedAt: invokedAt,
+          },
+          {
+            ...(runtime.now ? { now: runtime.now } : {}),
+            ...(runtime.randomId ? { randomId: runtime.randomId } : {}),
+          },
+        );
+      publishCapabilityInvocationReconciliationHead(
+        input.invocationHeadRuntime,
         invocation,
-        {
-          reasonCode: "HOST_SERVICE_OUTCOME_UNCERTAIN",
-          evidenceRefs: [
-            {
-              id: "host-service-action",
-              sha256: actionParametersSha256,
-            },
-          ],
-          openedAt: invokedAt,
-        },
-        {
-          ...(runtime.now ? { now: runtime.now } : {}),
-          ...(runtime.randomId ? { randomId: runtime.randomId } : {}),
-        },
+        opened,
       );
+      const reconciliation = opened.reconciliation;
+      const lockedInvocation = opened.invocation;
       const core = Object.freeze({
         schemaVersion: "toadaid.host-service-receipt.v1" as const,
         status: "RECONCILIATION_REQUIRED" as const,
         capabilityId: normalized.capabilityId,
         invocationId: invocation.record.invocationId,
+        invocationRecordSha256:
+          lockedInvocation.recordSha256,
         intentSha256: invocation.record.request.intentSha256,
         runId: invocation.record.runId,
         hostId: normalized.hostId,
@@ -2111,6 +2147,7 @@ export async function invokeGovernedHostService(
         receiptSha256: receiptSha256(core),
       });
       return Object.freeze({
+        invocation: lockedInvocation,
         receipt,
         budget: budgetAfter,
         result: null,
@@ -2123,6 +2160,7 @@ export async function invokeGovernedHostService(
       status: "DEGRADED" as const,
       capabilityId: normalized.capabilityId,
       invocationId: invocation.record.invocationId,
+      invocationRecordSha256: invocation.recordSha256,
       intentSha256: invocation.record.request.intentSha256,
       runId: invocation.record.runId,
       hostId: normalized.hostId,
@@ -2164,6 +2202,7 @@ export async function invokeGovernedHostService(
       receiptSha256: receiptSha256(core),
     });
     return Object.freeze({
+      invocation,
       receipt,
       budget: budgetAfter,
       result: null,

@@ -132,6 +132,38 @@ function setup(
     { now: () => new Date("2026-09-26T05:10:02.000Z") },
   );
 
+  let currentInvocation = started;
+  const invocationHeadRuntime = {
+    resolveCurrentInvocationHead(
+      identity: Readonly<{
+        runId: string;
+        invocationId: string;
+      }>,
+    ) {
+      if (
+        identity.runId !== currentInvocation.record.runId ||
+        identity.invocationId !==
+          currentInvocation.record.invocationId
+      ) {
+        return null;
+      }
+      return currentInvocation;
+    },
+    claimCurrentInvocationHead(
+      expected: typeof started,
+      next: typeof started,
+    ) {
+      if (
+        currentInvocation.recordSha256 !==
+        expected.recordSha256
+      ) {
+        return false;
+      }
+      currentInvocation = next;
+      return true;
+    },
+  };
+
   return {
     args,
     registry,
@@ -139,6 +171,7 @@ function setup(
     ready,
     replayFence,
     started,
+    invocationHeadRuntime,
     registration,
   };
 }
@@ -156,6 +189,7 @@ test("P13 returns replay-fence-bound success without completing H1", async () =>
 
   const outcome = await executeGovernedConnectorInvocation(adapter, {
     invocation: ctx.started,
+    invocationHeadRuntime: ctx.invocationHeadRuntime,
     contractBinding: ctx.binding,
     contractReady: ctx.ready,
     contractRequirement: requirement(),
@@ -169,6 +203,14 @@ test("P13 returns replay-fence-bound success without completing H1", async () =>
     throw new Error("fixture expected SUCCEEDED outcome");
   }
   assert.equal(outcome.replayFenceSha256, ctx.replayFence.recordSha256);
+  assert.equal(
+    outcome.invocationRecordSha256,
+    ctx.started.recordSha256,
+  );
+  assert.equal(
+    outcome.invocation.recordSha256,
+    ctx.started.recordSha256,
+  );
   assert.equal(
     outcome.adapterReceiptSha256,
     sha256(outcome.invocationResult.receipt),
@@ -196,6 +238,7 @@ test("P13 refuses mismatched replay fence before adapter entry", async () => {
       },
       {
         invocation: ctx.started,
+    invocationHeadRuntime: ctx.invocationHeadRuntime,
         contractBinding: ctx.binding,
         contractReady: ctx.ready,
         contractRequirement: requirement(),
@@ -225,6 +268,7 @@ test("P13 preserves pre-dispatch P12 refusal without opening reconciliation", as
       },
       {
         invocation: ctx.started,
+    invocationHeadRuntime: ctx.invocationHeadRuntime,
         contractBinding: ctx.binding,
         contractReady: ctx.ready,
         contractRequirement: requirement(),
@@ -254,6 +298,7 @@ test("P13 refuses invalid reconciliationId before adapter entry", async () => {
       },
       {
         invocation: ctx.started,
+    invocationHeadRuntime: ctx.invocationHeadRuntime,
         contractBinding: ctx.binding,
         contractReady: ctx.ready,
         contractRequirement: requirement(),
@@ -284,6 +329,7 @@ test("P13 refuses invalid openedAt before adapter entry", async () => {
       },
       {
         invocation: ctx.started,
+    invocationHeadRuntime: ctx.invocationHeadRuntime,
         contractBinding: ctx.binding,
         contractReady: ctx.ready,
         contractRequirement: requirement(),
@@ -294,6 +340,37 @@ test("P13 refuses invalid openedAt before adapter entry", async () => {
       },
     ),
     /openedAt must be canonical ISO-8601/,
+  );
+
+  assert.equal(called, false);
+});
+
+test("H1/X1B-P2 connector refuses backward reconciliation time before provider entry", async () => {
+  const ctx = setup();
+  let called = false;
+
+  await assert.rejects(
+    executeGovernedConnectorInvocation(
+      {
+        registration: ctx.registration,
+        invoke() {
+          called = true;
+          return { ok: true };
+        },
+      },
+      {
+        invocation: ctx.started,
+    invocationHeadRuntime: ctx.invocationHeadRuntime,
+        contractBinding: ctx.binding,
+        contractReady: ctx.ready,
+        contractRequirement: requirement(),
+        contractRegistry: ctx.registry,
+        arguments: ctx.args,
+        replayFence: ctx.replayFence,
+        openedAt: "2026-09-26T05:10:01.999Z",
+      },
+    ),
+    /earlier than active H1 predecessor/,
   );
 
   assert.equal(called, false);
@@ -313,6 +390,7 @@ test("P13 converts post-entry provider exception into X1 reconciliation", async 
     },
     {
       invocation: ctx.started,
+    invocationHeadRuntime: ctx.invocationHeadRuntime,
       contractBinding: ctx.binding,
       contractReady: ctx.ready,
       contractRequirement: requirement(),
@@ -330,6 +408,24 @@ test("P13 converts post-entry provider exception into X1 reconciliation", async 
   }
   assert.equal(outcome.errorClass, "Error");
   assert.equal(outcome.replayFenceSha256, ctx.replayFence.recordSha256);
+  assert.equal(
+    outcome.invocation.record.status,
+    "RECONCILIATION_REQUIRED",
+  );
+  assert.equal(
+    outcome.invocationRecordSha256,
+    outcome.invocation.recordSha256,
+  );
+  assert.equal(
+    outcome.invocation.record.reconciliation
+      ?.openReconciliationSha256,
+    outcome.reconciliation.recordSha256,
+  );
+  assert.equal(
+    outcome.invocation.record.continuity
+      .previousRecordSha256,
+    ctx.started.recordSha256,
+  );
   assert.equal(outcome.reconciliation.record.status, "OPEN");
   assert.equal(
     outcome.reconciliation.record.disposition,
@@ -345,6 +441,84 @@ test("P13 converts post-entry provider exception into X1 reconciliation", async 
     outcome.errorFingerprintSha256,
   );
   assert.equal(ctx.started.record.status, "STARTED");
+
+  let staleCalls = 0;
+  await assert.rejects(
+    executeGovernedConnectorInvocation(
+      {
+        registration: ctx.registration,
+        invoke() {
+          staleCalls += 1;
+          return { ok: true };
+        },
+      },
+      {
+        invocation: ctx.started,
+        invocationHeadRuntime:
+          ctx.invocationHeadRuntime,
+        contractBinding: ctx.binding,
+        contractReady: ctx.ready,
+        contractRequirement: requirement(),
+        contractRegistry: ctx.registry,
+        arguments: ctx.args,
+        replayFence: ctx.replayFence,
+      },
+    ),
+    /stale relative to current H1 head/,
+  );
+  assert.equal(staleCalls, 0);
+});
+
+test("H1/X1B-P2 connector makes post-dispatch H1 head CAS conflict explicit", async () => {
+  const ctx = setup("inv-connector-head-conflict");
+  let calls = 0;
+  const conflictingHeadRuntime = {
+    resolveCurrentInvocationHead:
+      ctx.invocationHeadRuntime.resolveCurrentInvocationHead,
+    claimCurrentInvocationHead() {
+      return false;
+    },
+  };
+
+  await assert.rejects(
+    executeGovernedConnectorInvocation(
+      {
+        registration: ctx.registration,
+        invoke() {
+          calls += 1;
+          throw new Error(
+            "provider outcome unknown during head race",
+          );
+        },
+      },
+      {
+        invocation: ctx.started,
+        invocationHeadRuntime:
+          conflictingHeadRuntime,
+        contractBinding: ctx.binding,
+        contractReady: ctx.ready,
+        contractRequirement: requirement(),
+        contractRegistry: ctx.registry,
+        arguments: ctx.args,
+        replayFence: ctx.replayFence,
+        reconciliationId:
+          "recon-connector-head-conflict",
+        openedAt: "2026-09-26T05:10:03.000Z",
+      },
+    ),
+    (error: unknown) => {
+      assert.equal(
+        (error as { name?: string }).name,
+        "CapabilityInvocationHeadConflictError",
+      );
+      assert.equal(
+        (error as { status?: string }).status,
+        "RECONCILIATION_REQUIRED",
+      );
+      return true;
+    },
+  );
+  assert.equal(calls, 1);
 });
 
 test("P13 treats malformed post-entry provider result as uncertain external outcome", async () => {
@@ -359,6 +533,7 @@ test("P13 treats malformed post-entry provider result as uncertain external outc
 
   const outcome = await executeGovernedConnectorInvocation(adapter, {
     invocation: ctx.started,
+    invocationHeadRuntime: ctx.invocationHeadRuntime,
     contractBinding: ctx.binding,
     contractReady: ctx.ready,
     contractRequirement: requirement(),

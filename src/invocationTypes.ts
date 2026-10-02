@@ -130,6 +130,21 @@ export interface CapabilityInvocationEnvelope {
   recordSha256: string;
 }
 
+export interface CapabilityInvocationHeadIdentity {
+  readonly runId: string;
+  readonly invocationId: string;
+}
+
+export interface CapabilityInvocationHeadRuntime {
+  resolveCurrentInvocationHead(
+    identity: CapabilityInvocationHeadIdentity,
+  ): CapabilityInvocationEnvelope | null;
+  claimCurrentInvocationHead(
+    expected: CapabilityInvocationEnvelope,
+    next: CapabilityInvocationEnvelope,
+  ): boolean;
+}
+
 export interface CreateCapabilityInvocationInput {
   invocationId?: string;
   runId: string;
