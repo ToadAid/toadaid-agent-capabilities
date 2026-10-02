@@ -6,8 +6,10 @@ export type CapabilityInvocationStatus =
   | "REFUSED"
   | "STARTED"
   | "CANCEL_REQUESTED"
+  | "RECONCILIATION_REQUIRED"
   | "COMPLETED"
-  | "FAILED";
+  | "FAILED"
+  | "RECONCILED";
 
 export interface CapabilityInvocationRequestEvidence {
   intentSha256: string;
@@ -54,7 +56,48 @@ export interface CapabilityInvocationFailedOutcome {
   evidenceRefs: readonly CapabilityInvocationEvidenceReference[];
 }
 
-export type CapabilityInvocationOutcome = CapabilityInvocationCompletedOutcome | CapabilityInvocationFailedOutcome;
+export type CapabilityInvocationReconciliationFinding =
+  | "CONFIRMED_NOT_EXECUTED"
+  | "CONFIRMED_EXECUTED"
+  | "STILL_UNKNOWN";
+
+export type CapabilityInvocationReplayDisposition =
+  | "RETRY_ALLOWED"
+  | "DO_NOT_RETRY"
+  | "NEW_INVOCATION_REQUIRED"
+  | "BLOCKED_PENDING_RECONCILIATION";
+
+export type CapabilityInvocationExecutionTruth =
+  | "EXECUTED"
+  | "NOT_EXECUTED"
+  | "UNKNOWN";
+
+export interface CapabilityInvocationReconciliationBinding {
+  readonly reconciliationId: string;
+  readonly replayFenceSha256: string;
+  readonly openReconciliationSha256: string;
+  readonly invocationRecordSha256: string;
+  readonly openedAt: string;
+}
+
+export interface CapabilityInvocationReconciledOutcome {
+  readonly kind: "RECONCILED";
+  readonly reconciledAt: string;
+  readonly managerId: string;
+  readonly reconciliationId: string;
+  readonly reconciliationSha256: string;
+  readonly replayFenceSha256: string;
+  readonly finding: CapabilityInvocationReconciliationFinding;
+  readonly disposition: CapabilityInvocationReplayDisposition;
+  readonly executionTruth: CapabilityInvocationExecutionTruth;
+  readonly proofSha256: string | null;
+  readonly evidenceRefs: readonly CapabilityInvocationEvidenceReference[];
+}
+
+export type CapabilityInvocationOutcome =
+  | CapabilityInvocationCompletedOutcome
+  | CapabilityInvocationFailedOutcome
+  | CapabilityInvocationReconciledOutcome;
 
 export interface CapabilityInvocationContinuity {
   previousRecordSha256: string | null;
@@ -76,6 +119,7 @@ export interface CapabilityInvocationRecord {
   authorization: CapabilityInvocationAuthorityEvidence | null;
   start: CapabilityInvocationStartEvidence | null;
   cancellation: CapabilityInvocationCancellationEvidence | null;
+  reconciliation?: CapabilityInvocationReconciliationBinding | null;
   outcome: CapabilityInvocationOutcome | null;
   continuity: CapabilityInvocationContinuity;
 }

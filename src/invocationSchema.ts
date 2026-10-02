@@ -95,6 +95,13 @@ export function freezeInvocationRecord(record: CapabilityInvocationRecord): Capa
     authorization: record.authorization ? Object.freeze({ ...record.authorization }) : null,
     start: record.start ? Object.freeze({ ...record.start }) : null,
     cancellation: record.cancellation ? Object.freeze({ ...record.cancellation }) : null,
+    ...(record.reconciliation === undefined
+      ? {}
+      : {
+          reconciliation: record.reconciliation
+            ? Object.freeze({ ...record.reconciliation })
+            : null,
+        }),
     outcome: record.outcome ? Object.freeze({ ...record.outcome, evidenceRefs: Object.freeze([...record.outcome.evidenceRefs]) }) : null,
     continuity: Object.freeze({ ...record.continuity }),
   });

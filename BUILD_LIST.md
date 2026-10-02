@@ -333,6 +333,8 @@ Checkbox law: mark an item complete only when the implementation is landed on ca
   - document/deprecate legacy `host:filesystem-read`, `host:filesystem-write`, and `host:command-execute` versus structured P18 names so both families cannot become an operator-policy trap
 
 - [ ] **H1/X1B — Reconciliation terminal closeout**
+  - [x] **H1/X1B-P1 — Reconciliation-locked H1 core:** explicit `RECONCILIATION_REQUIRED` lifecycle lock plus terminal `RECONCILED` truth bound to exact resolved X1 SHA/finding/disposition/proof.
+  - [ ] **H1/X1B-P2 — Producer wiring:** route connector, desktop-interaction, and host-service uncertain outcomes through the H1/X1 lock so current invocation truth cannot bypass reconciliation closeout.
   - consume exact resolved X1 reconciliation evidence into a terminal H1 transition instead of leaving reconciliation and invocation lifecycle separately mutable
   - prevent H1 `COMPLETED`/`FAILED` outcomes that contradict open or resolved reconciliation truth
   - terminal evidence binds the exact reconciliation SHA and disposition

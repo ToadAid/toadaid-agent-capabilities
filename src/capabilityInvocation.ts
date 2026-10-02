@@ -39,6 +39,13 @@ export {
   validateCapabilityInvocationEnvelope,
   validateCapabilityInvocationRecord,
 } from "./capabilityInvocationRecord.js";
+export {
+  beginCapabilityInvocationReconciliation,
+  closeCapabilityInvocationReconciliation,
+} from "./invocationReconciliation.js";
+export type {
+  OpenCapabilityInvocationReconciliationResult,
+} from "./invocationReconciliation.js";
 export type * from "./invocationTypes.js";
 
 export function authorizeCapabilityInvocation(
@@ -189,7 +196,11 @@ export function assessCapabilityInvocationResume(
     const authority = resolveCapabilityAuthority(current.record.capabilityId, policy.manifest, policy.policyLayers);
     currentCapabilityDecision = authority.decision;
     decision = authority.decision === "ALLOW" ? "READY_TO_START" : "BLOCKED_BY_REVOCATION";
-  } else if (current.record.status === "STARTED" || current.record.status === "CANCEL_REQUESTED") {
+  } else if (
+    current.record.status === "STARTED" ||
+    current.record.status === "CANCEL_REQUESTED" ||
+    current.record.status === "RECONCILIATION_REQUIRED"
+  ) {
     decision = "RECONCILIATION_REQUIRED";
   } else {
     decision = "TERMINAL";
