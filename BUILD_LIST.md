@@ -313,7 +313,7 @@ Checkbox law: mark an item complete only when the implementation is landed on ca
   - bind numeric display selection to display-inventory/topology epoch rather than treating display indexes as durable monitor identity
   - require `now + maxWallClockMs <= P15 lease.expiresAt` for wait operations; cancellation truth distinguishes requested, delivered, confirmed-quiescent, and uncertain
 
-- [ ] **P17B — Prepared desktop mutation dispatch**
+- [x] **P17B — Prepared desktop mutation dispatch**
   - separate provider read-only preparation from the mutation boundary so target/evidence/focus/generation validation may refuse cleanly before dispatch without opening X1 reconciliation
   - preparation ticket binds request/parameter hash, selected provider generation/fingerprint, exact resolved target identity, short expiry, and provider nonce
   - claim mutation lifecycle/budget state at the actual dispatch boundary rather than merely on entry to provider code

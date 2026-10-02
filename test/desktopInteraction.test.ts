@@ -456,7 +456,7 @@ function makeContext(
       requirement,
       registry,
       {
-        providerDescriptorSha256: "b".repeat(64),
+        providerDescriptorSha256: PROVIDER_DESCRIPTOR_SHA,
         adapterRegistrationSha256: desktopInteractionAdapterRegistrationSha256(registration),
         implementationFingerprintSha256: IMPL_SHA,
       },
@@ -493,10 +493,33 @@ function makeContext(
   const baseAdapter: GovernedDesktopInteractionAdapter =
     {
       registration,
-      async interact(adapterRequest) {
+      async prepare(preparationRequest) {
+        return {
+          schemaVersion:
+            "toadaid.desktop-interaction-prepare-result.v1",
+          status: "PREPARED",
+          providerDescriptorSha256:
+            preparationRequest.providerDescriptorSha256,
+          providerGenerationSha256:
+            preparationRequest.providerGenerationSha256,
+          implementationFingerprintSha256:
+            preparationRequest.implementationFingerprintSha256,
+          providerNonce: "provider-nonce-001",
+          resolvedTargetIdentitySha256:
+            sha256({
+              windowId:
+                preparationRequest.windowId,
+              targetEvidenceSha256:
+                preparationRequest.targetEvidenceSha256,
+            }),
+        };
+      },
+      async dispatch(adapterRequest) {
         return {
           schemaVersion:
             "toadaid.desktop-interaction-adapter-result.v1",
+          preparationTicketSha256:
+            adapterRequest.preparationTicket.ticketSha256,
           interactionEpoch:
             adapterRequest.interactionEpoch,
           hostId: adapterRequest.hostId,
@@ -617,6 +640,10 @@ test("P17 successful element click crosses P15/P3/C1/H1/X1/Q1 and invalidates th
     outcome.receipt.budget.reservedCost.toolCalls,
     1,
   );
+  assert.match(
+    outcome.receipt.preparationTicketSha256,
+    /^[a-f0-9]{64}$/,
+  );
   assert.equal(
     outcome.budget.record.usageReceipts.length,
     1,
@@ -636,14 +663,174 @@ test("P17 successful element click crosses P15/P3/C1/H1/X1/Q1 and invalidates th
   );
 });
 
+test("P17B typed provider refusal stays before dispatch without budget or observation mutation", async () => {
+  const ctx = makeContext(clickRequest());
+  let dispatchCalls = 0;
+  const adapter: GovernedDesktopInteractionAdapter = {
+    ...ctx.adapter,
+    async prepare() {
+      return {
+        schemaVersion:
+          "toadaid.desktop-interaction-prepare-result.v1",
+        status: "REFUSED_BEFORE_DISPATCH",
+        reasonCode: "TARGET_NOT_READY",
+        evidenceSha256: "e".repeat(64),
+      };
+    },
+    async dispatch(request) {
+      dispatchCalls += 1;
+      return ctx.adapter.dispatch!(request);
+    },
+  };
+
+  await assert.rejects(
+    interactGovernedDesktop(
+      adapter,
+      ctx.input,
+      {
+        now: () => new Date(NOW),
+        randomId: () => "interaction-refused",
+      },
+    ),
+    (error: unknown) => {
+      assert.equal(
+        (error as { status?: string }).status,
+        "REFUSED_BEFORE_DISPATCH",
+      );
+      assert.equal(
+        (error as { reasonCode?: string }).reasonCode,
+        "TARGET_NOT_READY",
+      );
+      return true;
+    },
+  );
+  assert.equal(dispatchCalls, 0);
+  assert.equal(
+    ctx.budget.record.usageReceipts.length,
+    0,
+  );
+  const head =
+    ctx.observationHeadRuntime
+      .resolveCurrentObservationHead({
+        hostId: "dell7920",
+        sessionId: "host-session-001",
+        windowId: "window-editor",
+      });
+  assert.equal(head?.status, "OK");
+  assert.equal(
+    head?.observationEpoch,
+    "observation-001",
+  );
+});
+
+test("P17B preparation identity mismatch refuses safely before dispatch", async () => {
+  const ctx = makeContext(clickRequest());
+  let dispatchCalls = 0;
+  const adapter: GovernedDesktopInteractionAdapter = {
+    ...ctx.adapter,
+    async prepare(request) {
+      return {
+        schemaVersion:
+          "toadaid.desktop-interaction-prepare-result.v1",
+        status: "PREPARED",
+        providerDescriptorSha256:
+          request.providerDescriptorSha256,
+        providerGenerationSha256:
+          "0".repeat(64),
+        implementationFingerprintSha256:
+          request.implementationFingerprintSha256,
+        providerNonce:
+          "provider-nonce-mismatch",
+        resolvedTargetIdentitySha256:
+          "1".repeat(64),
+      };
+    },
+    async dispatch(request) {
+      dispatchCalls += 1;
+      return ctx.adapter.dispatch!(request);
+    },
+  };
+
+  await assert.rejects(
+    interactGovernedDesktop(
+      adapter,
+      ctx.input,
+      {
+        now: () => new Date(NOW),
+        randomId: () =>
+          "interaction-prep-identity-mismatch",
+      },
+    ),
+    (error: unknown) => {
+      assert.equal(
+        (error as { status?: string }).status,
+        "REFUSED_BEFORE_DISPATCH",
+      );
+      assert.equal(
+        (error as { reasonCode?: string }).reasonCode,
+        "PREPARATION_IDENTITY_MISMATCH",
+      );
+      return true;
+    },
+  );
+  assert.equal(dispatchCalls, 0);
+  assert.equal(
+    ctx.budget.record.usageReceipts.length,
+    0,
+  );
+});
+
+test("P17B preparation throw is a safe pre-dispatch refusal rather than X1 uncertainty", async () => {
+  const ctx = makeContext(clickRequest());
+  let dispatchCalls = 0;
+  const adapter: GovernedDesktopInteractionAdapter = {
+    ...ctx.adapter,
+    async prepare() {
+      throw new Error("focus check failed");
+    },
+    async dispatch(request) {
+      dispatchCalls += 1;
+      return ctx.adapter.dispatch!(request);
+    },
+  };
+
+  await assert.rejects(
+    interactGovernedDesktop(
+      adapter,
+      ctx.input,
+      {
+        now: () => new Date(NOW),
+        randomId: () =>
+          "interaction-prep-throw",
+      },
+    ),
+    (error: unknown) => {
+      assert.equal(
+        (error as { status?: string }).status,
+        "REFUSED_BEFORE_DISPATCH",
+      );
+      assert.equal(
+        (error as { reasonCode?: string }).reasonCode,
+        "PREPARATION_FAILED",
+      );
+      return true;
+    },
+  );
+  assert.equal(dispatchCalls, 0);
+  assert.equal(
+    ctx.budget.record.usageReceipts.length,
+    0,
+  );
+});
+
 test("P17 refuses stale P16 observation before adapter entry", async () => {
   const ctx = makeContext(clickRequest());
   let calls = 0;
   const adapter: GovernedDesktopInteractionAdapter = {
     ...ctx.adapter,
-    async interact(request) {
+    async dispatch(request) {
       calls += 1;
-      return ctx.adapter.interact(request);
+      return ctx.adapter.dispatch!(request);
     },
   };
   ctx.observationHeadRuntime.publishCurrentObservationHead({
@@ -680,9 +867,9 @@ test("P17 atomically claims the exact P16 head and refuses a freshness race befo
   let calls = 0;
   const adapter: GovernedDesktopInteractionAdapter = {
     ...ctx.adapter,
-    async interact(request) {
+    async dispatch(request) {
       calls += 1;
-      return ctx.adapter.interact(request);
+      return ctx.adapter.dispatch!(request);
     },
   };
   const base = ctx.observationHeadRuntime;
@@ -909,9 +1096,9 @@ test("P17 requires NON_REPLAYABLE X1 classification before adapter entry", async
   let calls = 0;
   const adapter: GovernedDesktopInteractionAdapter = {
     ...ctx.adapter,
-    async interact(request) {
+    async dispatch(request) {
       calls += 1;
-      return ctx.adapter.interact(request);
+      return ctx.adapter.dispatch!(request);
     },
   };
 
@@ -934,7 +1121,7 @@ test("P17 adapter throw after entry opens X1 reconciliation instead of retrying"
     clickRequest(),
     "NON_REPLAYABLE",
     {
-      async interact() {
+      async dispatch() {
         throw new Error("input dispatch uncertain");
       },
     },
@@ -973,10 +1160,12 @@ test("P17 malformed post-entry result also requires reconciliation", async () =>
     clickRequest(),
     "NON_REPLAYABLE",
     {
-      async interact(adapterRequest) {
+      async dispatch(adapterRequest) {
         return {
           schemaVersion:
             "toadaid.desktop-interaction-adapter-result.v1",
+          preparationTicketSha256:
+            adapterRequest.preparationTicket.ticketSha256,
           interactionEpoch: "wrong-epoch",
           hostId: adapterRequest.hostId,
           sessionId: adapterRequest.sessionId,
@@ -1010,9 +1199,9 @@ test("P17 stale P15 lease head refuses before adapter entry", async () => {
   let calls = 0;
   const adapter: GovernedDesktopInteractionAdapter = {
     ...ctx.adapter,
-    async interact(request) {
+    async dispatch(request) {
       calls += 1;
-      return ctx.adapter.interact(request);
+      return ctx.adapter.dispatch!(request);
     },
   };
   const narrowed =
@@ -1059,9 +1248,9 @@ test("P17 changed H1 arguments refuse before adapter entry", async () => {
   let calls = 0;
   const adapter: GovernedDesktopInteractionAdapter = {
     ...ctx.adapter,
-    async interact(request) {
+    async dispatch(request) {
       calls += 1;
-      return ctx.adapter.interact(request);
+      return ctx.adapter.dispatch!(request);
     },
   };
   const changed: DesktopPointerClickRequest = {
@@ -1091,9 +1280,9 @@ test("P17 Q1 preflight refuses insufficient budget before adapter entry", async 
   let calls = 0;
   const adapter: GovernedDesktopInteractionAdapter = {
     ...ctx.adapter,
-    async interact(request) {
+    async dispatch(request) {
       calls += 1;
-      return ctx.adapter.interact(request);
+      return ctx.adapter.dispatch!(request);
     },
   };
   const tinyBudget = createRunBudgetLedger(

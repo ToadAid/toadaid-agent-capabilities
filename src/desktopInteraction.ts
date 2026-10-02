@@ -39,6 +39,9 @@ import type {
   DesktopInteractionAdapterRegistration,
   DesktopInteractionAdapterRequest,
   DesktopInteractionAdapterResult,
+  DesktopInteractionPreparationRequest,
+  DesktopInteractionPreparationResult,
+  DesktopInteractionPreparationTicket,
   DesktopInteractionCapabilityId,
   DesktopInteractionKind,
   DesktopInteractionObservationBinding,
@@ -125,6 +128,23 @@ const DEFAULT_MAX_OBSERVATION_AGE_MS = 5_000;
 const MAX_OBSERVATION_AGE_MS = 30_000;
 const DEFAULT_MAX_WALL_CLOCK_MS = 5_000;
 const MAX_WALL_CLOCK_MS = 30_000;
+const MAX_PREPARATION_TTL_MS = 2_000;
+
+export class DesktopInteractionRefusedBeforeDispatchError extends Error {
+  readonly status = "REFUSED_BEFORE_DISPATCH" as const;
+  readonly reasonCode: string;
+  readonly evidenceSha256: string | null;
+
+  constructor(
+    reasonCode: string,
+    evidenceSha256: string | null = null,
+  ) {
+    super(`desktop interaction refused before dispatch: ${reasonCode}`);
+    this.name = "DesktopInteractionRefusedBeforeDispatchError";
+    this.reasonCode = reasonCode;
+    this.evidenceSha256 = evidenceSha256;
+  }
+}
 
 function objectValue(
   value: unknown,
@@ -1060,6 +1080,223 @@ function actionParametersSha256(
   });
 }
 
+function buildDesktopInteractionPreparationTicket(
+  value: DesktopInteractionPreparationResult,
+  request: DesktopInteractionPreparationRequest,
+  preparedAt: Date,
+): DesktopInteractionPreparationTicket {
+  const raw = objectValue(
+    value,
+    "desktop interaction preparation result",
+  );
+  if (
+    raw.schemaVersion !==
+    "toadaid.desktop-interaction-prepare-result.v1"
+  ) {
+    throw new DesktopInteractionRefusedBeforeDispatchError(
+      "PREPARATION_SCHEMA_INVALID",
+    );
+  }
+
+  if (raw.status === "REFUSED_BEFORE_DISPATCH") {
+    const reasonCode = boundedId(
+      raw.reasonCode as string,
+      "preparation.reasonCode",
+    );
+    const evidenceSha256 =
+      raw.evidenceSha256 == null
+        ? null
+        : sha(
+            raw.evidenceSha256 as string,
+            "preparation.evidenceSha256",
+          )!;
+    throw new DesktopInteractionRefusedBeforeDispatchError(
+      reasonCode,
+      evidenceSha256,
+    );
+  }
+
+  if (raw.status !== "PREPARED") {
+    throw new DesktopInteractionRefusedBeforeDispatchError(
+      "PREPARATION_STATUS_INVALID",
+    );
+  }
+
+  const providerDescriptorSha256 = sha(
+    raw.providerDescriptorSha256 as string,
+    "preparation.providerDescriptorSha256",
+  )!;
+  const providerGenerationSha256 = sha(
+    raw.providerGenerationSha256 as string,
+    "preparation.providerGenerationSha256",
+  )!;
+  const implementationFingerprintSha256 = sha(
+    raw.implementationFingerprintSha256 as string,
+    "preparation.implementationFingerprintSha256",
+  )!;
+
+  if (
+    providerDescriptorSha256 !==
+      request.providerDescriptorSha256 ||
+    providerGenerationSha256 !==
+      request.providerGenerationSha256 ||
+    implementationFingerprintSha256 !==
+      request.implementationFingerprintSha256
+  ) {
+    throw new DesktopInteractionRefusedBeforeDispatchError(
+      "PREPARATION_IDENTITY_MISMATCH",
+    );
+  }
+
+  const providerNonce = boundedId(
+    raw.providerNonce as string,
+    "preparation.providerNonce",
+  );
+  const resolvedTargetIdentitySha256 = sha(
+    raw.resolvedTargetIdentitySha256 as string,
+    "preparation.resolvedTargetIdentitySha256",
+  )!;
+  const preparedAtIso = canonicalIso(
+    preparedAt.toISOString(),
+    "preparedAt",
+  );
+  const expiresAt = canonicalIso(
+    new Date(
+      preparedAt.getTime() + request.requestedTtlMs,
+    ).toISOString(),
+    "expiresAt",
+  );
+
+  const core = Object.freeze({
+    schemaVersion:
+      "toadaid.desktop-interaction-preparation-ticket.v1" as const,
+    preparationId: boundedId(
+      `prep-${sha256({
+        invocationId: request.invocationId,
+        parametersSha256: request.parametersSha256,
+        targetEvidenceSha256:
+          request.targetEvidenceSha256,
+        providerNonce,
+        resolvedTargetIdentitySha256,
+      }).slice(0, 32)}`,
+      "preparationId",
+    ),
+    invocationId: request.invocationId,
+    runId: request.runId,
+    hostId: request.hostId,
+    sessionId: request.sessionId,
+    windowId: request.windowId,
+    capabilityId: request.capabilityId,
+    parametersSha256: request.parametersSha256,
+    targetEvidenceSha256:
+      request.targetEvidenceSha256,
+    providerDescriptorSha256,
+    providerGenerationSha256,
+    implementationFingerprintSha256,
+    providerNonce,
+    resolvedTargetIdentitySha256,
+    preparedAt: preparedAtIso,
+    expiresAt,
+  });
+
+  return Object.freeze({
+    ...core,
+    ticketSha256: sha256(core),
+  });
+}
+
+function assertDesktopInteractionPreparationCurrent(
+  ticket: DesktopInteractionPreparationTicket,
+  request: DesktopInteractionPreparationRequest,
+  runtime: DesktopObservationHeadRuntime,
+  now: Date,
+): void {
+  if (
+    ticket.invocationId !== request.invocationId ||
+    ticket.runId !== request.runId ||
+    ticket.hostId !== request.hostId ||
+    ticket.sessionId !== request.sessionId ||
+    ticket.windowId !== request.windowId ||
+    ticket.capabilityId !== request.capabilityId ||
+    ticket.parametersSha256 !==
+      request.parametersSha256 ||
+    ticket.targetEvidenceSha256 !==
+      request.targetEvidenceSha256 ||
+    ticket.providerDescriptorSha256 !==
+      request.providerDescriptorSha256 ||
+    ticket.providerGenerationSha256 !==
+      request.providerGenerationSha256 ||
+    ticket.implementationFingerprintSha256 !==
+      request.implementationFingerprintSha256
+  ) {
+    throw new DesktopInteractionRefusedBeforeDispatchError(
+      "PREPARATION_TICKET_BINDING_MISMATCH",
+    );
+  }
+
+  const expectedSha256 = sha256({
+    schemaVersion: ticket.schemaVersion,
+    preparationId: ticket.preparationId,
+    invocationId: ticket.invocationId,
+    runId: ticket.runId,
+    hostId: ticket.hostId,
+    sessionId: ticket.sessionId,
+    windowId: ticket.windowId,
+    capabilityId: ticket.capabilityId,
+    parametersSha256: ticket.parametersSha256,
+    targetEvidenceSha256:
+      ticket.targetEvidenceSha256,
+    providerDescriptorSha256:
+      ticket.providerDescriptorSha256,
+    providerGenerationSha256:
+      ticket.providerGenerationSha256,
+    implementationFingerprintSha256:
+      ticket.implementationFingerprintSha256,
+    providerNonce: ticket.providerNonce,
+    resolvedTargetIdentitySha256:
+      ticket.resolvedTargetIdentitySha256,
+    preparedAt: ticket.preparedAt,
+    expiresAt: ticket.expiresAt,
+  });
+  if (expectedSha256 !== ticket.ticketSha256) {
+    throw new DesktopInteractionRefusedBeforeDispatchError(
+      "PREPARATION_TICKET_INTEGRITY_MISMATCH",
+    );
+  }
+
+  const expiresAtMs = Date.parse(ticket.expiresAt);
+  const preparedAtMs = Date.parse(ticket.preparedAt);
+  if (
+    !Number.isFinite(expiresAtMs) ||
+    !Number.isFinite(preparedAtMs) ||
+    expiresAtMs <= preparedAtMs ||
+    expiresAtMs - preparedAtMs >
+      MAX_PREPARATION_TTL_MS ||
+    now.getTime() > expiresAtMs
+  ) {
+    throw new DesktopInteractionRefusedBeforeDispatchError(
+      "PREPARATION_EXPIRED",
+    );
+  }
+
+  const currentProvider =
+    runtime.resolveCurrentProviderIdentity({
+      hostId: request.hostId,
+      sessionId: request.sessionId,
+    });
+  if (
+    currentProvider === null ||
+    currentProvider.providerDescriptorSha256 !==
+      ticket.providerDescriptorSha256 ||
+    currentProvider.providerGenerationSha256 !==
+      ticket.providerGenerationSha256
+  ) {
+    throw new DesktopInteractionRefusedBeforeDispatchError(
+      "PROVIDER_GENERATION_CHANGED",
+    );
+  }
+}
+
 function zeroCost(): RunBudgetVector {
   return {
     modelRequests: 0,
@@ -1234,6 +1471,16 @@ function normalizeAdapterResult(
     );
   }
   if (
+    sha(
+      raw.preparationTicketSha256 as string,
+      "preparationTicketSha256",
+    ) !== request.preparationTicket.ticketSha256
+  ) {
+    throw new Error(
+      "desktop interaction adapter result preparation ticket mismatch",
+    );
+  }
+  if (
     boundedId(
       raw.interactionEpoch as string,
       "interactionEpoch",
@@ -1267,6 +1514,8 @@ function normalizeAdapterResult(
     );
   const evidenceSha256 = sha256({
     adapterEvidenceSha256,
+    preparationTicketSha256:
+      request.preparationTicket.ticketSha256,
     interactionEpoch: request.interactionEpoch,
     parametersSha256: request.parametersSha256,
     targetEvidenceSha256:
@@ -1279,6 +1528,8 @@ function normalizeAdapterResult(
   return Object.freeze({
     schemaVersion:
       "toadaid.desktop-interaction-adapter-result.v1",
+    preparationTicketSha256:
+      request.preparationTicket.ticketSha256,
     interactionEpoch: request.interactionEpoch,
     hostId: request.hostId,
     sessionId: request.sessionId,
@@ -1328,9 +1579,19 @@ export async function interactGovernedDesktop(
       input.request,
     );
   const parametersSha256 = sha256(normalized);
-  const registration = normalizeDesktopInteractionAdapterRegistration(
-    adapter.registration,
-  );
+  const registration =
+    normalizeDesktopInteractionAdapterRegistration(
+      adapter.registration,
+    );
+
+  if (
+    typeof adapter.prepare !== "function" ||
+    typeof adapter.dispatch !== "function"
+  ) {
+    throw new DesktopInteractionRefusedBeforeDispatchError(
+      "P17B_PREPARED_DISPATCH_ADAPTER_REQUIRED",
+    );
+  }
 
   const leaseBinding =
     assertHostConnectorSessionLeaseUsable(
@@ -1397,13 +1658,166 @@ export async function interactGovernedDesktop(
     );
   }
   const cost = reservedCost(normalized);
-  const availability = evaluateRunBudgetAvailability(
-    budgetBefore,
-    cost,
-  );
-  if (!availability.allowed) {
+  const availabilityBeforePreparation =
+    evaluateRunBudgetAvailability(
+      budgetBefore,
+      cost,
+    );
+  if (!availabilityBeforePreparation.allowed) {
     throw new RangeError(
-      `desktop interaction run budget exceeded: ${availability.exceededMetrics.join(",")}`,
+      `desktop interaction run budget exceeded: ${availabilityBeforePreparation.exceededMetrics.join(",")}`,
+    );
+  }
+
+  const currentProvider =
+    input.observationHeadRuntime
+      .resolveCurrentProviderIdentity({
+        hostId: normalized.hostId,
+        sessionId: normalized.sessionId,
+      });
+  if (
+    currentProvider === null ||
+    currentProvider.providerDescriptorSha256 !==
+      input.observationReceipt
+        .providerDescriptorSha256 ||
+    currentProvider.providerDescriptorSha256 !==
+      binding.providerDescriptorSha256 ||
+    currentProvider.providerGenerationSha256 !==
+      input.observationReceipt
+        .providerGenerationSha256
+  ) {
+    throw new DesktopInteractionRefusedBeforeDispatchError(
+      "PROVIDER_GENERATION_CHANGED",
+    );
+  }
+
+  const preparationRequest:
+    DesktopInteractionPreparationRequest =
+    Object.freeze({
+      schemaVersion:
+        "toadaid.desktop-interaction-prepare-request.v1",
+      invocationId: invocation.record.invocationId,
+      runId: invocation.record.runId,
+      hostId: normalized.hostId,
+      sessionId: normalized.sessionId,
+      ownerId: normalized.ownerId,
+      windowId:
+        input.observationReceipt.windowId!,
+      capabilityId: normalized.capabilityId,
+      toolName: normalized.toolName,
+      parametersSha256,
+      targetEvidenceSha256: targetSha256,
+      providerDescriptorSha256:
+        binding.providerDescriptorSha256,
+      providerGenerationSha256:
+        currentProvider.providerGenerationSha256,
+      implementationFingerprintSha256:
+        binding.implementationFingerprintSha256,
+      requestedTtlMs: Math.min(
+        MAX_PREPARATION_TTL_MS,
+        normalized.maxWallClockMs,
+      ),
+      kind: normalized.kind,
+      target: normalized.target,
+    });
+
+  let preparationResult:
+    DesktopInteractionPreparationResult;
+  try {
+    preparationResult =
+      await adapter.prepare(preparationRequest);
+  } catch (error) {
+    throw new DesktopInteractionRefusedBeforeDispatchError(
+      "PREPARATION_FAILED",
+      errorFingerprint(error),
+    );
+  }
+
+  const preparedAt = (
+    runtime.now ?? (() => new Date())
+  )();
+  if (
+    !(preparedAt instanceof Date) ||
+    Number.isNaN(preparedAt.getTime())
+  ) {
+    throw new TypeError(
+      "desktop interaction preparation time is invalid",
+    );
+  }
+
+  let preparationTicket:
+    DesktopInteractionPreparationTicket;
+  try {
+    preparationTicket =
+      buildDesktopInteractionPreparationTicket(
+        preparationResult,
+        preparationRequest,
+        preparedAt,
+      );
+  } catch (error) {
+    if (
+      error instanceof
+      DesktopInteractionRefusedBeforeDispatchError
+    ) {
+      throw error;
+    }
+    throw new DesktopInteractionRefusedBeforeDispatchError(
+      "PREPARATION_RESULT_INVALID",
+      errorFingerprint(error),
+    );
+  }
+
+  const dispatchNow = (
+    runtime.now ?? (() => new Date())
+  )();
+  if (
+    !(dispatchNow instanceof Date) ||
+    Number.isNaN(dispatchNow.getTime())
+  ) {
+    throw new TypeError(
+      "desktop interaction dispatch time is invalid",
+    );
+  }
+
+  assertDesktopInteractionPreparationCurrent(
+    preparationTicket,
+    preparationRequest,
+    input.observationHeadRuntime,
+    dispatchNow,
+  );
+
+  const dispatchObservation =
+    assertObservationBinding(
+      normalized,
+      input.observationRequest,
+      input.observationReceipt,
+      input.observationHeadRuntime,
+      dispatchNow,
+    );
+  const dispatchTargetSha256 =
+    targetEvidenceSha256(
+      normalized,
+      dispatchObservation,
+      input.observationReceipt,
+      input.observationHeadRuntime,
+    );
+  if (
+    dispatchTargetSha256 !==
+    preparationTicket.targetEvidenceSha256
+  ) {
+    throw new DesktopInteractionRefusedBeforeDispatchError(
+      "TARGET_EVIDENCE_CHANGED",
+    );
+  }
+
+  const availabilityAtDispatch =
+    evaluateRunBudgetAvailability(
+      budgetBefore,
+      cost,
+    );
+  if (!availabilityAtDispatch.allowed) {
+    throw new RangeError(
+      `desktop interaction run budget exceeded before dispatch: ${availabilityAtDispatch.exceededMetrics.join(",")}`,
     );
   }
 
@@ -1412,49 +1826,69 @@ export async function interactGovernedDesktop(
     "interactionEpoch",
   );
   const dispatchedAt = canonicalIso(
-    now.toISOString(),
+    dispatchNow.toISOString(),
     "dispatchedAt",
   );
+
+  // Read-only provider preparation is over. Mutation can begin only after the
+  // exact P16 head is atomically claimed.
+  claimInteractionPending(
+    input.observationHeadRuntime,
+    input.observationReceipt,
+    interactionEpoch,
+  );
+
+  // Q1 mutation usage is recorded at the dispatch boundary, not when provider
+  // preparation begins.
   const budgetAfter = recordRunBudgetUsage(
     budgetBefore,
     {
       receiptId: boundedId(
         `desktop-action-${sha256({
-          invocationId: invocation.record.invocationId,
+          invocationId:
+            invocation.record.invocationId,
           interactionEpoch,
         }).slice(0, 32)}`,
         "receiptId",
       ),
       kind: "TOOL",
       occurredAt: dispatchedAt,
-      invocationId: invocation.record.invocationId,
+      invocationId:
+        invocation.record.invocationId,
       sourceSha256: parametersSha256,
       delta: cost,
     },
     {
-      ...(runtime.now ? { now: runtime.now } : {}),
+      ...(runtime.now
+        ? { now: runtime.now }
+        : {}),
       ...(runtime.randomId
         ? { randomId: runtime.randomId }
         : {}),
     },
   );
 
-  const adapterRequest: DesktopInteractionAdapterRequest =
+  const adapterRequest:
+    DesktopInteractionAdapterRequest =
     Object.freeze({
       schemaVersion:
         "toadaid.desktop-interaction-adapter-request.v1",
-      invocationId: invocation.record.invocationId,
+      preparationTicket,
+      invocationId:
+        invocation.record.invocationId,
       runId: invocation.record.runId,
       hostId: normalized.hostId,
       sessionId: normalized.sessionId,
       ownerId: normalized.ownerId,
-      windowId: input.observationReceipt.windowId!,
+      windowId:
+        input.observationReceipt.windowId!,
       capabilityId: normalized.capabilityId,
       toolName: normalized.toolName,
       interactionEpoch,
       parametersSha256,
       targetEvidenceSha256: targetSha256,
-      maxWallClockMs: normalized.maxWallClockMs,
+      maxWallClockMs:
+        normalized.maxWallClockMs,
       parameters: normalized,
     });
 
@@ -1465,15 +1899,10 @@ export async function interactGovernedDesktop(
   const actionSha256 =
     actionParametersSha256(normalized);
 
-  claimInteractionPending(
-    input.observationHeadRuntime,
-    input.observationReceipt,
-    interactionEpoch,
-  );
-
+  // Only a failure after dispatch begins is an uncertain external mutation.
   try {
     const result = normalizeAdapterResult(
-      await adapter.interact(adapterRequest),
+      await adapter.dispatch(adapterRequest),
       adapterRequest,
       input.observationHeadRuntime,
     );
@@ -1482,25 +1911,31 @@ export async function interactGovernedDesktop(
         "toadaid.desktop-interaction-receipt.v1" as const,
       status: "OK" as const,
       capabilityId: normalized.capabilityId,
-      invocationId: invocation.record.invocationId,
+      invocationId:
+        invocation.record.invocationId,
       intentSha256:
         invocation.record.request.intentSha256,
       runId: invocation.record.runId,
       hostId: normalized.hostId,
       sessionId: normalized.sessionId,
       ownerId: normalized.ownerId,
-      windowId: input.observationReceipt.windowId!,
+      windowId:
+        input.observationReceipt.windowId!,
       leaseSha256: leaseBinding.leaseSha256,
-      contractBindingSha256: binding.bindingSha256,
+      contractBindingSha256:
+        binding.bindingSha256,
       descriptorSha256:
         compatibility.descriptorSha256,
       adapterRegistrationSha256:
         registrationSha256,
-      replayFenceSha256: fence.recordSha256,
+      replayFenceSha256:
+        fence.recordSha256,
       interactionEpoch,
       observationReceiptSha256:
         input.observationReceipt.receiptSha256,
       targetEvidenceSha256: targetSha256,
+      preparationTicketSha256:
+        preparationTicket.ticketSha256,
       parametersSha256,
       actionParametersSha256: actionSha256,
       dispatchedAt,
@@ -1542,11 +1977,18 @@ export async function interactGovernedDesktop(
               id: "desktop-target",
               sha256: targetSha256,
             },
+            {
+              id: "desktop-preparation",
+              sha256:
+                preparationTicket.ticketSha256,
+            },
           ],
           openedAt: dispatchedAt,
         },
         {
-          ...(runtime.now ? { now: runtime.now } : {}),
+          ...(runtime.now
+            ? { now: runtime.now }
+            : {}),
           ...(runtime.randomId
             ? { randomId: runtime.randomId }
             : {}),
@@ -1559,25 +2001,31 @@ export async function interactGovernedDesktop(
       status:
         "RECONCILIATION_REQUIRED" as const,
       capabilityId: normalized.capabilityId,
-      invocationId: invocation.record.invocationId,
+      invocationId:
+        invocation.record.invocationId,
       intentSha256:
         invocation.record.request.intentSha256,
       runId: invocation.record.runId,
       hostId: normalized.hostId,
       sessionId: normalized.sessionId,
       ownerId: normalized.ownerId,
-      windowId: input.observationReceipt.windowId!,
+      windowId:
+        input.observationReceipt.windowId!,
       leaseSha256: leaseBinding.leaseSha256,
-      contractBindingSha256: binding.bindingSha256,
+      contractBindingSha256:
+        binding.bindingSha256,
       descriptorSha256:
         compatibility.descriptorSha256,
       adapterRegistrationSha256:
         registrationSha256,
-      replayFenceSha256: fence.recordSha256,
+      replayFenceSha256:
+        fence.recordSha256,
       interactionEpoch,
       observationReceiptSha256:
         input.observationReceipt.receiptSha256,
       targetEvidenceSha256: targetSha256,
+      preparationTicketSha256:
+        preparationTicket.ticketSha256,
       parametersSha256,
       actionParametersSha256: actionSha256,
       dispatchedAt,

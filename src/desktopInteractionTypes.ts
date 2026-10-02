@@ -187,9 +187,76 @@ export interface DesktopInteractionAdapterRegistration {
   readonly implementationFingerprintSha256: string;
 }
 
+export interface DesktopInteractionPreparationRequest {
+  readonly schemaVersion:
+    "toadaid.desktop-interaction-prepare-request.v1";
+  readonly invocationId: string;
+  readonly runId: string;
+  readonly hostId: string;
+  readonly sessionId: string;
+  readonly ownerId: string;
+  readonly windowId: string;
+  readonly capabilityId: DesktopInteractionCapabilityId;
+  readonly toolName: string;
+  readonly parametersSha256: string;
+  readonly targetEvidenceSha256: string;
+  readonly providerDescriptorSha256: string;
+  readonly providerGenerationSha256: string;
+  readonly implementationFingerprintSha256: string;
+  readonly requestedTtlMs: number;
+  readonly kind: DesktopInteractionKind;
+  readonly target: NormalizedDesktopPointerTarget | null;
+}
+
+export interface DesktopInteractionPreparedResult {
+  readonly schemaVersion:
+    "toadaid.desktop-interaction-prepare-result.v1";
+  readonly status: "PREPARED";
+  readonly providerDescriptorSha256: string;
+  readonly providerGenerationSha256: string;
+  readonly implementationFingerprintSha256: string;
+  readonly providerNonce: string;
+  readonly resolvedTargetIdentitySha256: string;
+}
+
+export interface DesktopInteractionPreparationRefusal {
+  readonly schemaVersion:
+    "toadaid.desktop-interaction-prepare-result.v1";
+  readonly status: "REFUSED_BEFORE_DISPATCH";
+  readonly reasonCode: string;
+  readonly evidenceSha256?: string | null;
+}
+
+export type DesktopInteractionPreparationResult =
+  | DesktopInteractionPreparedResult
+  | DesktopInteractionPreparationRefusal;
+
+export interface DesktopInteractionPreparationTicket {
+  readonly schemaVersion:
+    "toadaid.desktop-interaction-preparation-ticket.v1";
+  readonly preparationId: string;
+  readonly invocationId: string;
+  readonly runId: string;
+  readonly hostId: string;
+  readonly sessionId: string;
+  readonly windowId: string;
+  readonly capabilityId: DesktopInteractionCapabilityId;
+  readonly parametersSha256: string;
+  readonly targetEvidenceSha256: string;
+  readonly providerDescriptorSha256: string;
+  readonly providerGenerationSha256: string;
+  readonly implementationFingerprintSha256: string;
+  readonly providerNonce: string;
+  readonly resolvedTargetIdentitySha256: string;
+  readonly preparedAt: string;
+  readonly expiresAt: string;
+  readonly ticketSha256: string;
+}
+
 export interface DesktopInteractionAdapterRequest {
   readonly schemaVersion:
     "toadaid.desktop-interaction-adapter-request.v1";
+  readonly preparationTicket: DesktopInteractionPreparationTicket;
   readonly invocationId: string;
   readonly runId: string;
   readonly hostId: string;
@@ -214,6 +281,7 @@ export interface DesktopInteractionObservationReference {
 export interface DesktopInteractionAdapterResult {
   readonly schemaVersion:
     "toadaid.desktop-interaction-adapter-result.v1";
+  readonly preparationTicketSha256: string;
   readonly interactionEpoch: string;
   readonly hostId: string;
   readonly sessionId: string;
@@ -225,7 +293,25 @@ export interface DesktopInteractionAdapterResult {
 
 export interface GovernedDesktopInteractionAdapter {
   readonly registration: DesktopInteractionAdapterRegistration;
-  interact(
+  /**
+   * Read-only P17B provider preparation. It may resolve focus/target state,
+   * but it must not perform the mutation.
+   */
+  prepare?(
+    request: DesktopInteractionPreparationRequest,
+  ): Promise<DesktopInteractionPreparationResult>;
+  /**
+   * P17B mutation boundary. Governed runtime calls this only with a current,
+   * short-lived preparation ticket after exact provider/evidence rechecks.
+   */
+  dispatch?(
+    request: DesktopInteractionAdapterRequest,
+  ): Promise<DesktopInteractionAdapterResult>;
+  /**
+   * Legacy P17 entrypoint retained only for alpha structural compatibility.
+   * Governed P17B execution refuses adapters without prepare+dispatch.
+   */
+  interact?(
     request: DesktopInteractionAdapterRequest,
   ): Promise<DesktopInteractionAdapterResult>;
 }
@@ -283,6 +369,7 @@ export interface DesktopInteractionReceipt {
   readonly interactionEpoch: string;
   readonly observationReceiptSha256: string;
   readonly targetEvidenceSha256: string;
+  readonly preparationTicketSha256: string;
   readonly parametersSha256: string;
   readonly actionParametersSha256: string;
   readonly dispatchedAt: string;
