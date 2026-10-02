@@ -379,7 +379,7 @@ Checkbox law: mark an item complete only when the implementation is landed on ca
   - optional final re-verifier independently checks confirmed source locations and proof claims before report publication
   - provider/model diversity may be recorded as provenance but never treated as proof by itself
 
-- [ ] **SEC5 — Governed security execution sandbox**
+- [x] **SEC5 — Governed security execution sandbox**
   - active proof execution requires a dedicated sandbox capability separate from ordinary repository read/review authority
   - default network is disabled; environment is sanitized; writable paths are scratch-only; CPU/memory/process/wall-clock limits are explicit and Q1-accounted
   - target build/test/probe commands use structured executable + argv + bounded cwd with no ambient shell-string, inherited secrets, or host-home authority

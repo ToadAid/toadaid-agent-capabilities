@@ -237,6 +237,11 @@ export const CORE_CAPABILITY_MANIFEST = createCapabilityManifest([
     defaultDecision: "BLOCK",
   },
   {
+    id: "security:sandbox-exec",
+    description: "Execute bounded security proof steps only inside a separately authorized governed sandbox.",
+    defaultDecision: "BLOCK",
+  },
+  {
     id: "workspace:snapshot",
     description: "Capture a bounded immutable workspace snapshot in external history storage.",
     defaultDecision: "BLOCK",

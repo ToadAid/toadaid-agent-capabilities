@@ -678,3 +678,4 @@ export * from "./securityAudit.js";
 export * from "./securityCoverage.js";
 export * from "./securityHunter.js";
 export * from "./securityValidator.js";
+export * from "./securitySandbox.js";
