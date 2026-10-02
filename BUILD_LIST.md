@@ -357,7 +357,7 @@ Checkbox law: mark an item complete only when the implementation is landed on ca
   - canonical finding states are `CANDIDATE`, `CONFIRMED`, `NEEDS_VALIDATION`, and `REJECTED`; suspicion never silently becomes a vulnerability
   - evidence references and source locations are immutable plain data; security findings never grant mutation authority
 
-- [ ] **SEC2 — Coverage ledger + attack-class planning**
+- [x] **SEC2 — Coverage ledger + attack-class planning**
   - maintain a durable `(area × attack class)` coverage ledger with explicit unexplored/thin/covered states
   - every hunter assignment binds exact scope, attack class, source revision, budget, and predecessor coverage state
   - gap analysis selects thin or unexplored cells deterministically instead of repeatedly reviewing the same files

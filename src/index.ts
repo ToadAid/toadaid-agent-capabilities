@@ -675,3 +675,4 @@ export type {
   GovernedCapabilityRuntimeProvider,
 } from "./capabilityProviderRegistryTypes.js";
 export * from "./securityAudit.js";
+export * from "./securityCoverage.js";
