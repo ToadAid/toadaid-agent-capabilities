@@ -340,7 +340,7 @@ Checkbox law: mark an item complete only when the implementation is landed on ca
   - terminal evidence binds the exact reconciliation SHA and disposition
   - represent reconciled-executed, reconciled-not-executed, and outcome-unknown truth explicitly enough that the old invocation cannot be silently reused
 
-- [ ] **D2 — Capability-specific package surfaces**
+- [x] **D2 — Capability-specific package surfaces**
   - add package subpath exports for policy, invocation, contracts, modules, host-session, desktop-observation, desktop-interaction, host-services, and browser-runtime
   - verify host/provider consumers can import authority/types without traversing or installing browser runtime implementation code such as Playwright
   - keep one package initially; split packages only when independent release/install boundaries justify it

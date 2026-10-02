@@ -2,7 +2,21 @@ import { existsSync, readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 
 const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
-const expectedExports = [".", "./invocation", "./budget", "./contracts", "./replay", "./browser-resilience"];
+const expectedExports = [
+  ".",
+  "./policy",
+  "./invocation",
+  "./budget",
+  "./contracts",
+  "./replay",
+  "./modules",
+  "./host-session",
+  "./desktop-observation",
+  "./desktop-interaction",
+  "./host-services",
+  "./browser-runtime",
+  "./browser-resilience",
+];
 
 function fail(message) {
   throw new Error(`package verification failed: ${message}`);
