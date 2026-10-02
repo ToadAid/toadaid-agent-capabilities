@@ -676,3 +676,4 @@ export type {
 } from "./capabilityProviderRegistryTypes.js";
 export * from "./securityAudit.js";
 export * from "./securityCoverage.js";
+export * from "./securityHunter.js";

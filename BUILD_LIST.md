@@ -364,7 +364,7 @@ Checkbox law: mark an item complete only when the implementation is landed on ca
   - repeated audits extend prior coverage while changed source invalidates only the affected evidence/coverage lineage
   - coverage percentage is evidence of inspection breadth only; it never means the code is secure
 
-- [ ] **SEC3 — Isolated security Hunter children**
+- [x] **SEC3 — Isolated security Hunter children**
   - spawn P5-bounded security-research children with read-only source access by default and Q1 model/tool/network/time budgets
   - each Hunter receives one narrow attack class and repository slice rather than unrestricted whole-repo authority
   - Hunters may emit candidates plus reproduction/proof plans but cannot confirm their own findings
