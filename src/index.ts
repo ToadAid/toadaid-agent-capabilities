@@ -679,3 +679,4 @@ export * from "./securityCoverage.js";
 export * from "./securityHunter.js";
 export * from "./securityValidator.js";
 export * from "./securitySandbox.js";
+export * from "./securityAuditState.js";

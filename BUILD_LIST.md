@@ -387,7 +387,7 @@ Checkbox law: mark an item complete only when the implementation is landed on ca
   - if required sandbox guarantees are unavailable, execution is refused or the finding stays `NEEDS_VALIDATION` rather than pretending it was confirmed
   - timeout/crash/unknown execution outcomes never trigger blind replay of side-effecting proof steps
 
-- [ ] **SEC6 — Durable resumable audit state + source-change invalidation**
+- [x] **SEC6 — Durable resumable audit state + source-change invalidation**
   - persist reconnaissance, attack-class plan, coverage ledger, candidate/validation states, evidence references, and child-task lineage through P4/P5
   - resume requires the exact repository/source/config identity expected by the audit; source drift produces explicit stale/invalidated evidence rather than silent reuse
   - completed validated findings remain immutable historical evidence while changed affected regions re-enter the coverage queue
