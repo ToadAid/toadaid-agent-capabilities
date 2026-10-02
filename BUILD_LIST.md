@@ -371,7 +371,7 @@ Checkbox law: mark an item complete only when the implementation is landed on ca
   - child outputs bind exact source/evidence SHA and preserve disagreements rather than collapsing them into one verdict
   - no Hunter receives fix, Git push, merge, secret materialization, live economic, or unrelated host authority
 
-- [ ] **SEC4 — Adversarial validation + independent re-verification**
+- [x] **SEC4 — Adversarial validation + independent re-verification**
   - candidate validation runs in a fresh child/context whose objective is to disprove the finding before confirming it
   - the discovering Hunter and confirming validator must be distinct audit identities; self-confirmation is refused
   - `NEEDS_VALIDATION` remains first-class whenever proof cannot safely or deterministically establish exploitability
