@@ -682,3 +682,4 @@ export * from "./securitySandbox.js";
 export * from "./securityAuditState.js";
 export * from "./securityReport.js";
 export * from "./securitySpecialist.js";
+export * from "./securitySpecialistRuntime.js";

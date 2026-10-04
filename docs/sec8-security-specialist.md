@@ -110,3 +110,65 @@ This cut deliberately does not claim that a caller-supplied P6 snapshot or
 external merge actor is the globally authoritative runtime head. The governing
 runtime must supply authoritative P6/H1/C1/Q1/P5 evidence in the later SEC8
 runtime-binding cut.
+
+## P2 runtime spine binding
+
+`compileSecuritySpecialistRecipeWithContracts()` recompiles the P1 specialist
+recipe through the existing C1-aware W1 compiler. The resulting plan retains
+the P1 inspection-only authority law while binding every enabled capability to
+an exact C1 requirement and descriptor.
+
+`securitySpecialistStepIntentSha256()` deterministically binds one enabled
+recipe step to the exact contract-bound W1 plan. An H1 invocation used for the
+step must carry this intent digest; a different invocation intent cannot
+piggyback on the specialist plan.
+
+`bindSecuritySpecialistStepRuntime()` accepts one enabled step and requires all
+of the following at the same boundary:
+
+- current C1 plan compatibility and unchanged descriptor identity;
+- the exact current H1 invocation head in `AUTHORIZED` state;
+- H1 run/child/capability identity equal to the P5 child and W1 step;
+- current P3 authority for the parent and child;
+- a RUNNING P5 child whose delegated capabilities exactly equal the W1
+  effective capability set;
+- an exact Q1 parent-to-child allocation bound to that P5 child;
+- enough current child Q1 budget for the one step;
+- zero requested network, retry, or nested-child fuel.
+
+The runtime envelope contains hashes, identities, budget evidence, and boolean
+verification truth only. It carries no mutation, repair, Git, PR, merge, or
+other authority.
+
+`assertSecuritySpecialistStepRuntimeCurrent()` re-runs the authoritative checks
+against the current C1/P3/H1/Q1/P5 inputs. A resealed or previously valid
+runtime envelope is not reusable authority.
+
+The top-level SEC8 roadmap item remains open until this P2 cut passes
+adversarial review and is sealed on canonical `main`.
+
+
+### P2 current-head repair
+
+Adversarial review found that a structurally valid P5 child record and Q1 child
+ledger are not, by themselves, proof that either record is still the current
+head. A stale RUNNING child can remain hash-valid after the authoritative child
+has become BLOCKED, and an older Q1 child ledger can remain hash-valid after
+newer budget usage has consumed the remaining fuel.
+
+P2 therefore requires two caller-owned, read-only authoritative head resolvers:
+
+- `SecuritySpecialistChildTaskHeadRuntime` resolves the exact current P5 child
+  head by parent-run and child-task identity.
+- `SecuritySpecialistRunBudgetHeadRuntime` resolves the exact current child Q1
+  ledger head by run, budget, and child-task identity.
+
+The supplied P5 child and child Q1 ledger must hash-match those current heads
+before the runtime binder may claim `currentP5DelegationVerified` or
+`currentQ1BudgetVerified`. Missing heads fail closed. These resolver interfaces
+carry no mutation, CAS, authority-grant, budget-spend, or lifecycle-transition
+surface.
+
+The Q1 check remains a preflight availability proof, not a reservation or
+spend. The existing execution boundary remains responsible for recording real
+usage before/at governed dispatch.

@@ -401,7 +401,7 @@ Checkbox law: mark an item complete only when the implementation is landed on ca
   - report generation must not upgrade candidate state, alter proof truth, or hide rejected/uncertain evidence
   - provide deterministic diff/report comparison between audit revisions so newly introduced, fixed, regressed, and still-open findings are distinguishable
 
-- [ ] **SEC8 — Agent0 security specialist + separately governed repair handoff**
+- [x] **SEC8 — Agent0 security specialist + separately governed repair handoff**
   - expose the audit workflow as an Agent0/ToadGang security specialist using W1 recipes and the shared P3/C1/H1/Q1/P5 spine
   - support repository preflight, targeted audit, gap-fill audit, validation-only, and re-verification modes as explicit bounded recipes
   - security inspection authority is separate from `review:fix`, file mutation, Git commit/push, PR, and merge authority
