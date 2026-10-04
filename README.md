@@ -130,7 +130,7 @@ See [`docs/sec8-security-specialist.md`](docs/sec8-security-specialist.md) and t
 
 The package is `@toadaid/agent-capabilities`. During alpha it remains intentionally marked `"private": true` so npm publication cannot happen accidentally.
 
-Git/check-out consumption is supported through the build boundary, and capability-specific subpath exports let host/provider consumers avoid importing unrelated runtime code:
+Git/checkout consumption is supported through the build boundary, and capability-specific subpath exports let host/provider consumers avoid importing unrelated runtime code:
 
 ```text
 @toadaid/agent-capabilities
@@ -197,7 +197,6 @@ See [`docs/v1-deterministic-agent0-vertical-proof.md`](docs/v1-deterministic-age
 - [`docs/p3-capability-policy.md`](docs/p3-capability-policy.md) — capability identity and fail-closed policy.
 - [`docs/p4-run-state-capsule.md`](docs/p4-run-state-capsule.md) — resumable agent state.
 - [`docs/x1-idempotency-replay-fence.md`](docs/x1-idempotency-replay-fence.md) — retry/reconciliation discipline.
-- [`docs/p15-scoped-host-connector-session-lease.md`](docs/p15-scoped-host-connector-session-lease.md) — host/session authority boundary, when present in the current docs set.
 - [`docs/d2-capability-specific-package-surfaces.md`](docs/d2-capability-specific-package-surfaces.md) — package subpath boundaries.
 - [`docs/sec8-security-specialist.md`](docs/sec8-security-specialist.md) — governed security specialist and repair handoff.
 - [`docs/toadaid-agent-economy.md`](docs/toadaid-agent-economy.md) — future hosted MCP/ACP/Base settlement direction; **design direction, not an implementation promise**.
