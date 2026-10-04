@@ -394,7 +394,7 @@ Checkbox law: mark an item complete only when the implementation is landed on ca
   - budget exhaustion, interrupted children, and provider changes resume through explicit state transitions with no duplicate uncontrolled hunting
   - audit state is non-authority data and cannot restore revoked repository, sandbox, network, or host capabilities
 
-- [ ] **SEC7 — Canonical findings + verified report generation**
+- [x] **SEC7 — Canonical findings + verified report generation**
   - canonical machine-readable `findings.json` is schema-validated before any human-facing report is generated
   - findings carry severity/risk fields, source locations, attack class, proof status, evidence references, affected revision, and validator provenance without embedding secrets
   - generate `REPORT.md`, detailed finding views, coverage summary, and `NEEDS_VALIDATION` queue mechanically from canonical audit state
