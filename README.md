@@ -1,133 +1,235 @@
 # ToadAid Agent Capabilities
 
+**Status:** `0.1.0-alpha.0` — the current declared capability roadmap through SEC8 is implemented on canonical `main`  
+**Runtime:** Node.js 22+  
+**License:** Apache-2.0
+
 Governed reusable capabilities for ToadAid agents.
 
-This repository provides bounded capability modules that agents can consume without inheriting unrestricted host, wallet, repository, or execution authority.
+ToadAid Agent Capabilities is the shared capability and governance spine for agents that need to browse, inspect, resume, delegate, use host services, interact with desktops, invoke providers, and perform bounded specialist work **without inheriting ambient authority**.
 
-Implemented lanes:
+The core rule is simple:
 
-- **P1 — browser evidence:** open a permitted URL, observe rendered HTML, capture bounded DOM evidence and a screenshot receipt.
-- **P2 — browser interaction:** execute a bounded operator-authorized plan of navigation, click, and type actions, then return evidence of the resulting state.
-- **P3 — capability identity + policy:** keep capability installation separate from authority with sparse fail-closed policy resolution and decision traces.
-- **P4 — resumable run-state capsule:** preserve objective, phase, authority evidence, references, and work state across compaction/restart with tamper-evident continuity.
-- **P5 — persistent child-task lifecycle:** preserve subordinate task identity/state across failure and resume with fixed, non-widening delegated authority.
-- **P6 — workspace Time Travel:** capture immutable content-addressed snapshots, deterministic diffs, governed restore, and bounded history maintenance outside project Git.
-- **P7 — loop breaker + bounded repair:** fingerprint repeated failures, stop bounded loops, and optionally perform syntax-only tool-call repair without inventing semantics or authority.
-- **R1 — OpenCodeReview adapter:** bind OCR Delegation Mode into deterministic review planning, mandatory coverage, P5 reviewer/reflection specs, and a separately authorized P6-backed fix boundary.
-- **R2 — review session identity + resume lineage:** bind resumed review work to exact repository/source/rules/R1-plan evidence, require explicit provider/model transitions with predecessor lineage, and keep presentation state outside immutable review-session evidence.
-- **P8 — scoped browser sessions:** bind optional browser state to explicit owner/origin/expiry leases while keeping persistent state behind separate authority.
-- **P9 — adaptive web intelligence:** deterministic extraction, confidence-gated adaptive element relocation, sealed resumable crawl checkpoints, guarded XHR evidence, and an isolated Scrapling worker boundary.
-- **P10 — governed human interrupts:** create typed durable human decision gates bound to exact P4 state, accept one schema-validated resolution, and produce a resume proof without turning human text into authority.
-- **P11 — scoped secret leases:** keep raw secret bytes outside agent state while binding opaque handles to owner/provider/profile scope, exact consumer capabilities, short-lived materialization grants, and path-safe projection targets.
-- **W1 — governed recipe compiler:** compile declarative parameters, response schemas, turn/retry ceilings, and explicit required/optional/forbidden capability sets through current P3 policy before P4/P5 execution.
-- **H1 — capability invocation lifecycle:** bind request, current-policy authorization, start, progress/cancellation intent, completion/failure evidence, and resume assessment to one tamper-evident invocation identity.
-- **Q1 — unified run budget ledger:** bound model/token/tool/network/retry/time/child consumption with append-only usage receipts and conservative child sub-allocation across the run tree.
-- **C1 — capability contract + version discovery:** discover self-describing capability contracts, prove major/minor/feature compatibility before contract-aware W1 compile and H1 start, and bind compiled/runtime use to exact descriptor provenance.
-- **C1B — contract / implementation identity separation:** keep semantic capability identity bound to versioned feature and schema digests while separately sealing provider/module/adapter/platform implementation identity; invocation readiness requires the exact selected provider tuple and provider changes require a fresh binding.
-- **X1 — idempotency / replay fence:** classify logical invocations before start, bind deterministic replay identity, and require reconciliation proof before retrying uncertain side effects.
-- **B1 — browser resilience hardening:** invalidate stale DOM across navigation/failure, emit degraded evidence instead of fabricated state, distinguish same-document/full-document readiness, bound truncation, and provide deterministic semantic element IDs.
-- **V1 — Agent0 graduation harness:** clean-room package-consumer proof exercises governed recipe, continuity, delegation, invocation, budgets, contracts, replay discipline, human interrupts, secret handles, browser degradation, checkpoint, and restart through public package boundaries; canonical proof emits `V1_AGENT0_VERTICAL_OK`.
-- **D1 — package distribution surface:** build consumer-only `dist/src`, support Git installs through `prepare`, constrain packed files, and verify every public package export through the package boundary.
-- **P12 — governed connector adapter boundary:** invoke provider-specific adapters only from an already-started H1 invocation whose capability/tool/intent/arguments and exact current C1 descriptor + implementation binding still match; connector receipts retain hashes/provenance without becoming authority.
-- **P13 — governed connector outcome + reconciliation bridge:** require an exact X1 replay fence before provider entry, preserve pre-dispatch refusals, bind successful P12 receipts to replay classification, and turn any post-entry throw/malformed result into explicit `BLOCKED_PENDING_RECONCILIATION` without automatic retry or H1 completion.
-- **P14 — governed capability module lifecycle:** bind module identity/version to exact P3 capability defaults, C1 descriptors, P12 adapter registrations, and owned-resource fingerprints; installation starts disabled, enablement never grants P3 authority, and update/remove refuse dirty owned state.
-- **P9B — governed reusable web-session hygiene:** keep pooling behind current P8 lease authority, reset and reapply exact per-request settings on every checkout, fingerprint effective policy, quarantine errored/poisoned pages, and keep anonymous one-shot work separate from persistent authenticated state.
-- **P15 — scoped host-connector session lease:** bind host/session/owner identity to a narrow maximum capability set and expiry while requiring fresh P3 `ALLOW` for every filesystem read/write, command execution, tool invocation, or connector/MCP use; narrowing never widens and persistent config remains provenance only.
-- **P16 — governed desktop observation:** split display inventory, scoped screenshot, rich UI snapshot, and bounded exact-window wait-for into separate read-only host contracts behind a live P15 lease, fresh P3/C1/H1 checks, Q1 reservation, observation epochs, and degraded-on-failure evidence.
-- **P16B — observation evidence semantics hardening:** bind live window/element evidence to provider generation and namespace, scope numeric displays to topology epochs, emit exact coordinate-space geometry for P17, accept bounded wait timeouts as valid observations, and preserve explicit cancellation-delivery truth within the remaining P15 lease lifetime.
-- **P17 — governed desktop interaction:** split pointer click/move, scroll, ordinary text input, and shortcuts into separately authorized mutations bound to current P16 evidence, live P15/P3/C1/H1 authority, Q1 budget, and X1 non-replayable uncertainty handling.
-- **P18 — governed host services:** expose app launch, clipboard, process, file, notification, registry, and structured command execution as narrow BLOCK-by-default contracts with canonical scope, P15/P3/C1/H1/Q1 checks, and X1 reconciliation for mutations.
-- **P14B — typed provider module composition:** compose connector, desktop-observation, desktop-interaction, and host-service registrations from exact enabled P14 lifecycle heads; separate known/installed/enabled capability truth, require explicit selection for duplicate providers, and bind dispatch resolution to lifecycle/registration/descriptor/implementation identity.
-- **P19 — provider selection + availability + health projection:** project host-compatible providers through sealed live health and generation evidence, keep known/installed/enabled/available/authorized truth distinct, and bind runtime resolution to the exact host session and availability projection.
+> **Capabilities are explicit. Authority is not ambient.**
 
-See [`BUILD_LIST.md`](./BUILD_LIST.md) for the canonical roadmap.
+Installing code, attaching a host, saving state, discovering a provider, receiving a human response, or paying for a service never grants execution authority by itself.
 
-## Design rule
+## Architecture
 
-Capabilities are explicit. Authority is not ambient.
+```text
+agent / specialist
+       |
+       v
+W1 governed recipe
+       |
+       v
+P3 current authority
+       |
+       v
+C1 contract + implementation binding
+       |
+       v
+H1 invocation lifecycle
+       |
+       +---- Q1 bounded budget
+       +---- X1 replay / reconciliation discipline
+       |
+       v
+provider / adapter / host capability
+       |
+       v
+bounded result + evidence + receipts
 
-Agent intent never grants itself network or action authority. The embedding runtime/operator supplies the policy boundary.
+P4/P5 preserve resumable parent/child continuity across interruption or restart.
+```
 
-Installed does not mean authorized.
+The library keeps several kinds of truth separate:
 
-Saved state does not grant authority.
+```text
+KNOWN != INSTALLED != ENABLED != AVAILABLE != AUTHORIZED != INVOKED
+```
 
-Delegation can only narrow authority.
+Those distinctions are deliberate. Availability is not permission, evidence is not authority, and continuity does not restore revoked rights.
 
-Workspace history never lives inside or rewrites project Git.
+## Capability map
 
-Loop breakers may halt work as a safety invariant; bounded repair requires explicit authority and never invents semantics or authority.
+### Governance, continuity, and bounded autonomy
 
-Review inspection never implies review fixes, and external review engines never receive sovereign runtime authority.
+- **P3 — capability identity + policy:** canonical capability IDs, sparse fail-closed policy, explicit `BLOCK`, and plain-data authority decision traces.
+- **P4 — resumable run-state capsule:** tamper-evident objective/work/evidence continuity across compaction and restart.
+- **P5 — persistent child-task lifecycle:** durable subordinate tasks with fixed delegated capability sets that can only narrow authority.
+- **P6 — workspace Time Travel:** immutable content-addressed snapshots, deterministic diffs, governed restore, and bounded history outside project Git.
+- **P7 — loop breaker + bounded repair:** repeated-failure detection plus syntax-only repair that cannot invent semantics or authority.
+- **P10 — governed human interrupts:** typed durable decision gates bound to exact paused state; human text remains data, not a capability grant.
+- **P11 — scoped secret leases:** opaque secret handles, short-lived materialization grants, and no raw secret bytes in durable agent state.
 
-Review resume lineage is provenance, not permission. R2 may prove that a resumed review is bound to the same repository/source/rules/plan and explicitly record a provider/model transition, but it never grants `review:inspect`, `review:fix`, or workspace mutation authority.
+### Workflow, contracts, budgets, and replay discipline
 
-Browser session leases never imply browser action authority, and persistent authenticated state is never ambient or shared by default.
+- **W1 — governed recipe compiler:** declarative workflows with explicit required/optional/forbidden capabilities, turn ceilings, retry ceilings, and response schemas.
+- **H1 — capability invocation lifecycle:** request, authorization, start, progress, cancellation intent, completion/failure, and resume evidence bound to one invocation identity.
+- **Q1 — unified run budget ledger:** bounded model, token, tool, network, retry, time, and child-task consumption with conservative child allocation.
+- **C1 — capability contract + version discovery:** exact semantic contract compatibility before compile and invocation.
+- **C1B — contract / implementation identity separation:** semantic capability identity stays distinct from the selected provider/module/adapter implementation.
+- **X1 — idempotency / replay fence:** classifies work before dispatch and blocks blind replay after uncertain external outcomes.
+- **H1/X1B — reconciliation terminal closeout:** uncertain mutations remain reconciliation-locked until exact resolved X1 evidence closes the invocation truth.
 
-Adaptive web evidence never implies arbitrary HTTP, browser-action, stealth, or economic authority; the Scrapling worker is isolated behind typed policy.
+### Browser and web capabilities
 
-Human interrupt responses are typed run data, never capability grants; resume requires the exact bound P4 state and a sealed resolved interrupt.
+- **P1 — browser evidence:** permitted navigation, bounded DOM evidence, and screenshot receipts.
+- **P2 — browser interaction:** bounded operator-authorized navigate/click/type plans with action limits and guarded network behavior.
+- **P8 — scoped browser sessions:** owner/origin/expiry-bound browser state with separate persistent-session authority.
+- **P9 — adaptive web intelligence:** deterministic extraction, adaptive element relocation, resumable crawl checkpoints, guarded XHR evidence, and an isolated Scrapling worker boundary.
+- **P9B — reusable web-session hygiene:** reset-before-reuse, exact effective policy fingerprints, stale-authority checks, and poisoned-page quarantine.
+- **B1 — browser resilience:** navigation epochs, stale-DOM refusal, degraded evidence, bounded truncation, and deterministic semantic element IDs.
 
-Secret leases contain opaque broker handles, never secret bytes; materialization requires fresh secret and consumer authority, and revocation can only narrow access.
+### Review and repository work
 
-Recipes declare workflow intent and capability bounds; compiled plans are tamper-evident non-authority state and must be rechecked against current P3 policy before execution or resume.
+- **R1 — OpenCodeReview adapter:** deterministic review planning and coverage with `review:inspect` kept separate from `review:fix`.
+- **R2 — review session identity + resume lineage:** exact repository/source/rules/plan continuity and explicit provider/model transition provenance.
 
-Invocation records are evidence, not permission tokens; authorization is rechecked immediately before start, cancellation requests do not imply side effects stopped, and already-started resumed work requires reconciliation instead of blind retry.
+### Connectors, modules, and provider runtime
 
-Run budgets are accounting state, not capability grants; child allocations reserve parent fuel and already-spent or reserved capacity is never silently recreated on resume.
+- **P12 — governed connector adapter boundary:** provider adapters may run only from an already-started, exactly bound invocation.
+- **P13 — connector outcome + reconciliation bridge:** pre-dispatch refusal stays a refusal; post-entry ambiguity becomes reconciliation-required rather than automatic retry.
+- **P14 — governed capability module lifecycle:** install, enable, update, and remove are explicit lifecycle states; installation never grants P3 authority.
+- **P14B — typed provider module composition:** connector, desktop-observation, desktop-interaction, and host-service providers share one typed composition boundary.
+- **P15 — scoped host-connector session lease:** host attachment proves identity/connectivity, not filesystem, command, tool, or connector permission.
+- **P19 — provider selection + availability + health:** `KNOWN`, `INSTALLED`, `ENABLED`, `AVAILABLE`, and `AUTHORIZED` remain separate; stale provider generations invalidate old bindings.
 
-Capability contract discovery is compatibility evidence, not authority. Contract-aware plans and invocations still require current P3 permission. Semantic schema or feature changes require recompile; provider, adapter-registration, or implementation changes require explicit rebind instead of pretending the semantic contract changed or silently adopting a new implementation.
+### Desktop observation, interaction, and host services
 
-Replay fences are retry-discipline evidence, not authority. Unknown external outcomes remain blocked until reconciliation; non-replayable mutations never become replayable merely because a transport timed out.
+- **P16 — governed desktop observation:** display inventory, bounded screenshots, UI snapshots, and exact-window wait operations behind current host and policy authority.
+- **P16B — observation evidence semantics:** provider-generation binding, display-topology epochs, explicit coordinate spaces, and valid negative timeout evidence.
+- **P17 — governed desktop interaction:** pointer, scroll, ordinary text input, and shortcut capabilities are separated and bound to current observation evidence.
+- **P17B — prepared desktop mutation dispatch:** read-only target preparation happens before the mutation boundary so safe pre-dispatch refusal does not become false reconciliation.
+- **P18 — governed host services:** narrow app, clipboard, process, file, notification, registry, and structured command capabilities with BLOCK-by-default authority.
+- **P18B — host-service identity + containment:** process evidence, executable identity, argv profiles, registry views, lease containment, and bounded runtime content resolution.
 
-Browser resilience evidence is recovery state, not browser authority; stale DOM is refused after navigation/capture failure, degraded receipts never fabricate page state, and recoverable does not mean automatically retryable.
+## Security-audit specialist
 
-Package installation makes code available; it never grants authority. Distribution checks prove export/build integrity only, and V1 must consume the package boundary instead of repository source paths.
+The completed **SEC1–SEC8** lane turns repository security work into a governed specialist rather than an ambient superpower:
 
-Connector adapters are runtime implementations, not grants. P12 only invokes an adapter after exact H1/C1 identity and argument binding; provider-specific code cannot widen authority, silently swap implementation provenance, materialize secrets, or claim invocation completion on its own.
+1. **SEC1 — threat-model contract:** exact repository/revision/scope binding and canonical finding states.
+2. **SEC2 — coverage ledger:** durable area × attack-class planning with explicit unexplored/thin/covered truth.
+3. **SEC3 — isolated Hunter children:** bounded read-only P5/Q1 security researchers with narrow attack classes and repository slices.
+4. **SEC4 — adversarial validation:** a distinct validator tries to disprove candidates before confirmation; self-confirmation is refused.
+5. **SEC5 — governed security sandbox:** optional proof execution with sanitized environment, scratch-only writes, bounded resources, and network disabled by default.
+6. **SEC6 — durable audit state:** resumable reconnaissance, coverage, findings, evidence, and source-change invalidation.
+7. **SEC7 — canonical reporting:** schema-validated `findings.json`, deterministic human reports, and preserved uncertain/rejected evidence.
+8. **SEC8 — Agent0/ToadGang security specialist:** five bounded specialist modes plus a separately governed repair handoff bound to the shared P3/C1/H1/Q1/P5 spine.
 
-Provider availability and health are live routing evidence, never authority. P19 chooses only host-compatible enabled providers with current sealed health, while P3 authorization remains an independent decision; provider restart, disappearance, health change, session change, module transition, or provider-selection change invalidates the old availability-bound runtime registry.
+The security law is intentionally strict:
 
-Desktop observation evidence is generation-, topology-, and coordinate-space-specific. A provider restart invalidates old live references; numeric display indexes are meaningful only under the bound display-topology epoch; P17 coordinates must remain inside the exact P16 geometry in the same `DESKTOP_PHYSICAL` or `WINDOW_CLIENT_PHYSICAL` space. A wait timeout is valid negative evidence, while cancellation requested, delivered, confirmed-quiescent, and uncertain states remain distinct.
+> A finder cannot confirm its own finding, inspection does not imply repair authority, and a finder/validator cannot grant itself merge authority.
 
-Connector execution uncertainty is evidence, not permission to retry. P13 requires X1 replay classification before provider entry and converts any post-entry ambiguity into reconciliation while leaving H1 active; only X1 reconciliation may later determine whether retry, no retry, or a new invocation is required.
+Confirmed findings may produce bounded repair proposals and verification packages, but file mutation, Git, PR, review, and merge remain separately governed.
 
-Capability-module lifecycle is availability state, not authority. P14 requires module-owned capabilities to default `BLOCK`, separates installed / enabled / authorized states, binds C1 + P12 registration provenance, and permits update/removal only from exact clean module-owned resource state; it never executes arbitrary installer shell or grants policy permission.
+See [`docs/sec8-security-specialist.md`](docs/sec8-security-specialist.md) and the SEC1–SEC7 documents under [`docs/`](docs/).
 
-Reusable browser state is an optimization, not permission. P9B rechecks P8 on checkout and before returning persistent state to the pool, forces reset-before-apply for every request, fingerprints the exact effective timeout/header/resource/network policy, refuses sensitive authentication headers, and quarantines any errored, poisoned, stale-authority, or stale-lease page instead of reusing it.
+## Package surfaces
 
-Host attachment is identity, not machine authority. P15 separates `host:session` from filesystem read/write, command execution, tool invocation, and connector use; the lease is only a maximum scope, every active use rechecks current P3 authority plus the runtime-owned current lease head, stale predecessor leases are refused after narrowing/revocation, and saved connection configuration can prove provenance without granting access.
+The package is `@toadaid/agent-capabilities`. During alpha it remains intentionally marked `"private": true` so npm publication cannot happen accidentally.
 
-Desktop observation is evidence, not interaction authority. P16 requires explicit display/region/window scope, a current P15 lease head, exact H1 arguments, current C1 implementation provenance, and Q1 reservation before adapter entry; exact-window observations publish a runtime-owned current observation head before adapter entry, old receipts cannot keep old element references alive after a newer/degraded epoch, adapter artifact kinds are request-bound, and failures produce `DEGRADED` evidence with no reusable element references.
+Git/checkout consumption is supported through the build boundary, and capability-specific subpath exports let host/provider consumers avoid importing unrelated runtime code:
 
-Desktop interaction is mutation, not observation. P17 splits pointer click/move, scroll, ordinary text input, and shortcuts into separate BLOCK-by-default capabilities; every dispatch requires current P16 exact-window evidence, a live P15 lease, fresh P3/C1/H1 authority, Q1 budget, and an X1 `NON_REPLAYABLE` fence. The exact P16 head is atomically claimed into `PENDING` before adapter entry so a fresher observation cannot be overwritten by a stale action, raw coordinates require explicit bounded-region evidence unless display geometry is separately proven, ordinary text input requires receipt-bound P16 `ORDINARY_TEXT` target evidence, shortcuts require a real command-modifier chord, and uncertain post-entry outcomes require X1 reconciliation instead of blind replay.
+```text
+@toadaid/agent-capabilities
+@toadaid/agent-capabilities/invocation
+@toadaid/agent-capabilities/budget
+@toadaid/agent-capabilities/contracts
+@toadaid/agent-capabilities/replay
+@toadaid/agent-capabilities/browser-resilience
+@toadaid/agent-capabilities/policy
+@toadaid/agent-capabilities/modules
+@toadaid/agent-capabilities/host-session
+@toadaid/agent-capabilities/desktop-observation
+@toadaid/agent-capabilities/desktop-interaction
+@toadaid/agent-capabilities/host-services
+@toadaid/agent-capabilities/browser-runtime
+```
 
-Host-service authority is narrow and operation-specific. P18 separates reads from writes/destructive actions, requires a live P15 lease plus exact P3/C1/H1 and Q1 checks for every use, requires realpath-enforced canonical root/path contracts for filesystem access, and uses structured absolute executable + argv + explicit bounded cwd + non-inherited opaque env bindings with `shell=false`, `elevation=NONE`, and no UNC/device executable path. P18 v1 treats host mutations as `NON_REPLAYABLE`, process-stop requires fresh adapter-enforced process identity evidence, and uncertain post-entry mutations enter X1 reconciliation. Runtime adapters receive the opaque content references and notification text needed to perform authorized work, while raw file/clipboard/command/provider content and those runtime references never enter authority receipts.
+`playwright-chromium` is an optional peer owned by the explicit `browser-runtime` surface. Host-only consumers do not need the browser runtime dependency.
 
-Provider composition is availability evidence, not authority. P14B admits only exact enabled P14 lifecycle heads into dispatch, retains adapter-kind-specific runtime types, refuses ambiguous providers without an exact selection, and makes disable/remove/update/re-enable invalidate stale provider bindings. Known, installed, and enabled capability projections never imply P3 `ALLOW`.
+See [`docs/d2-capability-specific-package-surfaces.md`](docs/d2-capability-specific-package-surfaces.md).
 
-## Graduation proof
+## Verification
 
-Run `npm run v1:proof` from an installed checkout. The harness packs the current package, extracts it into a temporary Agent0-style consumer, links only the already-installed declared Playwright runtime dependency (no registry/network access), and executes the deterministic vertical scenario through package imports. V1 closes only when the command emits `V1_AGENT0_VERTICAL_OK`.
+From a checkout:
+
+```bash
+npm install
+npm test
+npm run package:check
+npm run v1:proof
+```
+
+`npm run package:check` proves declared export/build integrity and clean package-consumer boundaries.
+
+`npm run v1:proof` performs the deterministic Agent0 clean-room consumer scenario through package imports. Graduation closes only when it emits:
+
+```text
+V1_AGENT0_VERTICAL_OK
+```
+
+The proof exercises governed recipe compilation, continuity, delegation, invocation, budgets, contracts, replay discipline, human interrupts, secret handles, browser degradation, checkpoint, and restart without granting wallet, trading, push, merge, or other live economic authority.
+
+See [`docs/v1-deterministic-agent0-vertical-proof.md`](docs/v1-deterministic-agent0-vertical-proof.md).
+
+## Standing authority laws
+
+- **Installed does not mean authorized.**
+- **Enabled does not mean authorized.**
+- **Available does not mean authorized.**
+- **Saved state does not grant authority.**
+- **Delegation can only narrow authority.**
+- **Evidence and receipts are not permission tokens.**
+- **Human interrupt responses are typed run data, not capability grants.**
+- **Secret handles are references, never credentials.**
+- **Observation does not imply interaction authority.**
+- **Host attachment does not imply machine authority.**
+- **Unknown mutation outcomes require reconciliation, not blind retry.**
+- **Package installation and provider discovery never widen P3 policy.**
+- **Live economic authority remains outside this repository unless introduced through a separate governed boundary.**
+
+## Documentation
+
+- [`BUILD_LIST.md`](BUILD_LIST.md) — canonical capability roadmap and completion truth.
+- [`docs/p3-capability-policy.md`](docs/p3-capability-policy.md) — capability identity and fail-closed policy.
+- [`docs/p4-run-state-capsule.md`](docs/p4-run-state-capsule.md) — resumable agent state.
+- [`docs/x1-idempotency-replay-fence.md`](docs/x1-idempotency-replay-fence.md) — retry/reconciliation discipline.
+- [`docs/d2-capability-specific-package-surfaces.md`](docs/d2-capability-specific-package-surfaces.md) — package subpath boundaries.
+- [`docs/sec8-security-specialist.md`](docs/sec8-security-specialist.md) — governed security specialist and repair handoff.
+- [`docs/toadaid-agent-economy.md`](docs/toadaid-agent-economy.md) — future hosted MCP/ACP/Base settlement direction; **design direction, not an implementation promise**.
+
+The full `docs/` directory contains the lane-by-lane contracts and proofs behind the summarized surfaces above.
+
+## Engineering doctrine
+
+The repository follows a simple rule:
+
+> **Capability is the product. Ceremony is not the product.**
+
+Verification, receipts, provenance, lifecycle state, and approval boundaries exist to make useful capability safe and inspectable. They are not substitutes for working capability.
+
+Shared infrastructure stays provider/model neutral wherever practical, and the system prefers useful vertical cuts over framework ceremony.
+
+## License
+
+Licensed under the [Apache License 2.0](LICENSE).
 
 ## ToadAid community
 
-ToadAid builds for the **Toadgang community, Tobyworld, builders, and the people**.
-ToadAid Agent Capabilities is one part of that larger effort: reusable capabilities
-that help agents do useful work while keeping identity, evidence, policy, and
-execution authority explicitly bounded.
+ToadAid builds for the **Toadgang community, Tobyworld, builders, and the people**.  
+ToadAid Agent Capabilities is one part of that larger effort: reusable capabilities that help agents do useful work while keeping identity, evidence, policy, and execution authority explicitly bounded.
 
-If this project is useful to you, we would be grateful if you also took a little
-time to discover the community and world that inspired much of this work:
+If this project is useful to you, we would be grateful if you also took a little time to discover the community and world that inspired much of this work:
 
-- 🐸 **Join the Toadgang community on Telegram:** https://t.me/toadgang
-- 📖 **Explore Tobyworld:** https://tobyworld.app
-- 🌱 **Follow Toadgod and explore the lore on X:** https://twitter.com/toadgod1017
+- 🐸 **Join the Toadgang community on Telegram:** [https://t.me/toadgang](https://t.me/toadgang)
+- 📖 **Explore Tobyworld:** [https://tobyworld.app](https://tobyworld.app)
+- 🌱 **Follow Toadgod and explore the lore on X:** [https://twitter.com/toadgod1017](https://twitter.com/toadgod1017)
 
-There is no requirement to join any community in order to read, evaluate, or
-work with ToadAid projects under their published terms.
+There is no requirement to join any community in order to read, evaluate, or work with ToadAid projects under their published terms.
 
-We believe tools are better when people, stories, builders, and communities grow
-around them.
+We believe tools are better when people, stories, builders, and communities grow around them.
 
 **Built by ToadAid. Built for the Toadgang. Built for the people.**
