@@ -109,3 +109,25 @@ Provider composition is availability evidence, not authority. P14B admits only e
 ## Graduation proof
 
 Run `npm run v1:proof` from an installed checkout. The harness packs the current package, extracts it into a temporary Agent0-style consumer, links only the already-installed declared Playwright runtime dependency (no registry/network access), and executes the deterministic vertical scenario through package imports. V1 closes only when the command emits `V1_AGENT0_VERTICAL_OK`.
+
+## ToadAid community
+
+ToadAid builds for the **Toadgang community, Tobyworld, builders, and the people**.
+ToadAid Agent Capabilities is one part of that larger effort: reusable capabilities
+that help agents do useful work while keeping identity, evidence, policy, and
+execution authority explicitly bounded.
+
+If this project is useful to you, we would be grateful if you also took a little
+time to discover the community and world that inspired much of this work:
+
+- 🐸 **Join the Toadgang community on Telegram:** https://t.me/toadgang
+- 📖 **Explore Tobyworld:** https://tobyworld.app
+- 🌱 **Follow Toadgod and explore the lore on X:** https://twitter.com/toadgod1017
+
+There is no requirement to join any community in order to read, evaluate, or
+work with ToadAid projects under their published terms.
+
+We believe tools are better when people, stories, builders, and communities grow
+around them.
+
+**Built by ToadAid. Built for the Toadgang. Built for the people.**
