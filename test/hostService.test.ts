@@ -152,12 +152,12 @@ function requiredFeatures(request: HostServiceRequest): readonly string[] {
 function fileRead(): HostFileReadRequest {
   return {
     kind: "FILE_READ",
-    hostId: "dell7920",
+    hostId: "test-host-001",
     sessionId: "host-session-001",
     ownerId: "agent0",
     scope: {
-      root: "/home/tommy/projects",
-      path: "/home/tommy/projects/demo/README.md",
+      root: "/home/tester/projects",
+      path: "/home/tester/projects/demo/README.md",
     },
     maxBytes: 8_192,
     maxWallClockMs: 5_000,
@@ -167,12 +167,12 @@ function fileRead(): HostFileReadRequest {
 function fileWrite(): HostFileWriteRequest {
   return {
     kind: "FILE_WRITE",
-    hostId: "dell7920",
+    hostId: "test-host-001",
     sessionId: "host-session-001",
     ownerId: "agent0",
     scope: {
-      root: "/home/tommy/projects",
-      path: "/home/tommy/projects/demo/out.txt",
+      root: "/home/tester/projects",
+      path: "/home/tester/projects/demo/out.txt",
     },
     contentRef: "blob-ref-001",
     contentSha256: contentSha("blob-ref-001"),
@@ -387,7 +387,7 @@ function context(
 
   const lease = createHostConnectorSessionLease(
     {
-      hostId: "dell7920",
+      hostId: "test-host-001",
       sessionId: "host-session-001",
       ownerId: "agent0",
       allowedCapabilities: [capabilityId],
@@ -516,8 +516,8 @@ test("P18 installs eleven narrow host-service capabilities BLOCK by default", ()
 
 test("P18 filesystem scope canonicalizes POSIX/Windows paths and refuses escape", () => {
   const posix = normalizeHostPathScope({
-    root: "/home/tommy/projects",
-    path: "/home/tommy/projects/demo/a.txt",
+    root: "/home/tester/projects",
+    path: "/home/tester/projects/demo/a.txt",
   }) as Record<string, unknown>;
   assert.equal(posix.style, "POSIX");
   assert.equal(posix.symlinkPolicy, "REFUSE_ESCAPE");
@@ -531,8 +531,8 @@ test("P18 filesystem scope canonicalizes POSIX/Windows paths and refuses escape"
   assert.throws(
     () =>
       normalizeHostPathScope({
-        root: "/home/tommy/projects",
-        path: "/home/tommy/secrets.txt",
+        root: "/home/tester/projects",
+        path: "/home/tester/secrets.txt",
       }),
     /escapes/,
   );
@@ -712,15 +712,15 @@ test("H1/X1B-P2 host service refuses backward invocation time before adapter ent
 test("P18B-P2 structured command exec binds argv profile, bounded process policy, cwd/env, shell=false and no elevation", () => {
   const normalized = normalizeHostServiceRequest({
     kind: "COMMAND_EXEC",
-    hostId: "dell7920",
+    hostId: "test-host-001",
     sessionId: "host-session-001",
     ownerId: "agent0",
     executable: "/usr/bin/git",
     argvProfileId: "git-status-readonly",
     argv: ["status", "--short"],
     cwd: {
-      root: "/home/tommy/projects",
-      path: "/home/tommy/projects/demo",
+      root: "/home/tester/projects",
+      path: "/home/tester/projects/demo",
     },
     env: [
       {
@@ -748,14 +748,14 @@ test("P18B-P2 structured command exec binds argv profile, bounded process policy
     () =>
       normalizeHostServiceRequest({
         kind: "COMMAND_EXEC",
-        hostId: "dell7920",
+        hostId: "test-host-001",
         sessionId: "host-session-001",
         ownerId: "agent0",
         executable: "git",
         argvProfileId: "git-status-readonly",
         cwd: {
-          root: "/home/tommy/projects",
-          path: "/home/tommy/projects/demo",
+          root: "/home/tester/projects",
+          path: "/home/tester/projects/demo",
         },
         processPolicy: {
           childProcessPolicy: "FORBID",
@@ -771,7 +771,7 @@ test("P18B-P2 structured command exec binds argv profile, bounded process policy
     () =>
       normalizeHostServiceRequest({
         kind: "COMMAND_EXEC",
-        hostId: "dell7920",
+        hostId: "test-host-001",
         sessionId: "host-session-001",
         ownerId: "agent0",
         executable: "\\\\server\\share\\tool.exe",
@@ -794,14 +794,14 @@ test("P18B-P2 structured command exec binds argv profile, bounded process policy
     () =>
       normalizeHostServiceRequest({
         kind: "COMMAND_EXEC",
-        hostId: "dell7920",
+        hostId: "test-host-001",
         sessionId: "host-session-001",
         ownerId: "agent0",
         executable: "/usr/bin/git",
         argvProfileId: "git-status-readonly",
         cwd: {
-          root: "/home/tommy/projects",
-          path: "/home/tommy/projects/demo",
+          root: "/home/tester/projects",
+          path: "/home/tester/projects/demo",
         },
         processPolicy: {
           childProcessPolicy: "FORBID",
@@ -817,7 +817,7 @@ test("P18B-P2 structured command exec binds argv profile, bounded process policy
 test("P18B-P1 process stop requires a current governed process-read reference", async () => {
   const readRequest: HostServiceRequest = {
     kind: "PROCESS_READ",
-    hostId: "dell7920",
+    hostId: "test-host-001",
     sessionId: "host-session-001",
     ownerId: "agent0",
     pid: 42,
@@ -845,7 +845,7 @@ test("P18B-P1 process stop requires a current governed process-read reference", 
 
   const stopRequest: HostServiceRequest = {
     kind: "PROCESS_STOP",
-    hostId: "dell7920",
+    hostId: "test-host-001",
     sessionId: "host-session-001",
     ownerId: "agent0",
     process,
@@ -952,7 +952,7 @@ test("P18B-P1 process stop requires a current governed process-read reference", 
 test("P18B-P1 process reference integrity and provider generation are fail-closed", async () => {
   const readCtx = context({
     kind: "PROCESS_READ",
-    hostId: "dell7920",
+    hostId: "test-host-001",
     sessionId: "host-session-001",
     ownerId: "agent0",
     pid: 77,
@@ -978,7 +978,7 @@ test("P18B-P1 process reference integrity and provider generation are fail-close
     () =>
       normalizeHostServiceRequest({
         kind: "PROCESS_STOP",
-        hostId: "dell7920",
+        hostId: "test-host-001",
         sessionId: "host-session-001",
         ownerId: "agent0",
         process: {
@@ -991,7 +991,7 @@ test("P18B-P1 process reference integrity and provider generation are fail-close
 
   const request: HostServiceRequest = {
     kind: "PROCESS_STOP",
-    hostId: "dell7920",
+    hostId: "test-host-001",
     sessionId: "host-session-001",
     ownerId: "agent0",
     process,
@@ -1062,7 +1062,7 @@ test("P18 registry root scope is bounded and read/write authority is distinct", 
 
   const read = normalizeHostServiceRequest({
     kind: "REGISTRY_READ",
-    hostId: "dell7920",
+    hostId: "test-host-001",
     sessionId: "host-session-001",
     ownerId: "agent0",
     scope: {
@@ -1074,7 +1074,7 @@ test("P18 registry root scope is bounded and read/write authority is distinct", 
   });
   const write = normalizeHostServiceRequest({
     kind: "REGISTRY_WRITE",
-    hostId: "dell7920",
+    hostId: "test-host-001",
     sessionId: "host-session-001",
     ownerId: "agent0",
     scope: {
@@ -1127,7 +1127,7 @@ test("P18B-P1 structured host service refuses a lease that also carries its depr
   const mixedLease =
     createHostConnectorSessionLease(
       {
-        hostId: "dell7920",
+        hostId: "test-host-001",
         sessionId: "host-session-001",
         ownerId: "agent0",
         allowedCapabilities: [
@@ -1167,14 +1167,14 @@ test("P18B-P1 structured host service refuses a lease that also carries its depr
 test("P18B-P2 clipboard write resolves exact bytes while adapter and receipt stay ref-free", async () => {
   const read = normalizeHostServiceRequest({
     kind: "CLIPBOARD_READ",
-    hostId: "dell7920",
+    hostId: "test-host-001",
     sessionId: "host-session-001",
     ownerId: "agent0",
     format: "text/plain",
   });
   const write = normalizeHostServiceRequest({
     kind: "CLIPBOARD_WRITE",
-    hostId: "dell7920",
+    hostId: "test-host-001",
     sessionId: "host-session-001",
     ownerId: "agent0",
     format: "text/plain",
@@ -1189,7 +1189,7 @@ test("P18B-P2 clipboard write resolves exact bytes while adapter and receipt sta
 
   const request: HostServiceRequest = {
     kind: "CLIPBOARD_WRITE",
-    hostId: "dell7920",
+    hostId: "test-host-001",
     sessionId: "host-session-001",
     ownerId: "agent0",
     format: "text/plain",
@@ -1331,7 +1331,7 @@ test("P18B-P2 runtime resolves write content while notification text stays runti
 
   const notification: HostServiceRequest = {
     kind: "NOTIFICATION",
-    hostId: "dell7920",
+    hostId: "test-host-001",
     sessionId: "host-session-001",
     ownerId: "agent0",
     title: "ToadAid",
@@ -1374,15 +1374,15 @@ test("P18B-P2 runtime resolves write content while notification text stays runti
 test("P18B-P2 executable identity and argv profile are trusted-host bindings, not agent-declared authority", async () => {
   const request: HostServiceRequest = {
     kind: "COMMAND_EXEC",
-    hostId: "dell7920",
+    hostId: "test-host-001",
     sessionId: "host-session-001",
     ownerId: "agent0",
     executable: "/usr/bin/git",
     argvProfileId: "git-status-readonly",
     argv: ["status", "--short"],
     cwd: {
-      root: "/home/tommy/projects",
-      path: "/home/tommy/projects/demo",
+      root: "/home/tester/projects",
+      path: "/home/tester/projects/demo",
     },
     processPolicy: {
       childProcessPolicy: "FORBID",
@@ -1486,15 +1486,15 @@ test("P18B-P2 content resolver SHA mismatch refuses before adapter entry", async
 test("P18B-P2 timed-out command requires termination plus confirmed process-tree quiescence", async () => {
   const request: HostServiceRequest = {
     kind: "COMMAND_EXEC",
-    hostId: "dell7920",
+    hostId: "test-host-001",
     sessionId: "host-session-001",
     ownerId: "agent0",
     executable: "/usr/bin/git",
     argvProfileId: "git-status-readonly",
     argv: ["status"],
     cwd: {
-      root: "/home/tommy/projects",
-      path: "/home/tommy/projects/demo",
+      root: "/home/tester/projects",
+      path: "/home/tester/projects/demo",
     },
     processPolicy: {
       childProcessPolicy: "FORBID",
@@ -1571,15 +1571,15 @@ test("P18B-P2 timed-out command requires termination plus confirmed process-tree
 test("P18B-P2 command child-process count cannot exceed the declared bounded policy", async () => {
   const request: HostServiceRequest = {
     kind: "COMMAND_EXEC",
-    hostId: "dell7920",
+    hostId: "test-host-001",
     sessionId: "host-session-001",
     ownerId: "agent0",
     executable: "/usr/bin/git",
     argvProfileId: "git-status-readonly",
     argv: ["status"],
     cwd: {
-      root: "/home/tommy/projects",
-      path: "/home/tommy/projects/demo",
+      root: "/home/tester/projects",
+      path: "/home/tester/projects/demo",
     },
     processPolicy: {
       childProcessPolicy: "ALLOW_BOUNDED",
@@ -1721,7 +1721,7 @@ test("P18 changed H1 arguments and insufficient Q1 budget refuse before adapter 
 
 test("P18 app-launch and notification are mutations, process/clipboard/file/registry reads are reads", () => {
   const common = {
-    hostId: "dell7920",
+    hostId: "test-host-001",
     sessionId: "host-session-001",
     ownerId: "agent0",
   } as const;
@@ -1733,8 +1733,8 @@ test("P18 app-launch and notification are mutations, process/clipboard/file/regi
       executable: "/usr/bin/xdg-open",
       argvProfileId: "xdg-open-default",
       cwd: {
-        root: "/home/tommy/projects",
-        path: "/home/tommy/projects/demo",
+        root: "/home/tester/projects",
+        path: "/home/tester/projects/demo",
       },
     }).mutation,
     true,

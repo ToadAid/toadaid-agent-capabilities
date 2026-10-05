@@ -138,6 +138,7 @@ Git/checkout consumption is supported through the build boundary, and capability
 @toadaid/agent-capabilities/budget
 @toadaid/agent-capabilities/contracts
 @toadaid/agent-capabilities/replay
+@toadaid/agent-capabilities/workspace-history
 @toadaid/agent-capabilities/browser-resilience
 @toadaid/agent-capabilities/policy
 @toadaid/agent-capabilities/modules

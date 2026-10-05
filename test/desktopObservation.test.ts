@@ -90,7 +90,7 @@ function budgetLimits(): RunBudgetVector {
 function screenshotRequest(): DesktopScreenshotRequest {
   return {
     kind: "SCREENSHOT",
-    hostId: "dell7920",
+    hostId: "test-host-001",
     sessionId: "host-session-001",
     ownerId: "agent0",
     scope: { displayIds: [0], displayTopologyEpoch: "topology-001" },
@@ -225,7 +225,7 @@ function makeContext(
 
   const lease = createHostConnectorSessionLease(
     {
-      hostId: "dell7920",
+      hostId: "test-host-001",
       sessionId: "host-session-001",
       ownerId: "agent0",
       allowedCapabilities: [capabilityId],
@@ -442,7 +442,7 @@ test("P16 screenshot refuses ambient full-desktop capture and ambiguous scope", 
     () =>
       normalizeDesktopObservationRequest({
         kind: "SCREENSHOT",
-        hostId: "dell7920",
+        hostId: "test-host-001",
         sessionId: "host-session-001",
         ownerId: "agent0",
         scope: {},
@@ -454,7 +454,7 @@ test("P16 screenshot refuses ambient full-desktop capture and ambiguous scope", 
     () =>
       normalizeDesktopObservationRequest({
         kind: "SCREENSHOT",
-        hostId: "dell7920",
+        hostId: "test-host-001",
         sessionId: "host-session-001",
         ownerId: "agent0",
     scope: {
@@ -689,7 +689,7 @@ test("P16 Q1 preflight refuses insufficient budget before adapter entry", async 
 test("P16 UI element references bind exact observation/window epoch and stale after a newer observation", async () => {
   const request: DesktopObservationRequest = {
     kind: "UI_SNAPSHOT",
-    hostId: "dell7920",
+    hostId: "test-host-001",
     sessionId: "host-session-001",
     ownerId: "agent0",
     windowId: "window-editor",
@@ -769,7 +769,7 @@ test("P16 UI element references bind exact observation/window epoch and stale af
 test("P16 capture failure emits DEGRADED head for the new epoch and invalidates old window elements", async () => {
   const request: DesktopObservationRequest = {
     kind: "UI_SNAPSHOT",
-    hostId: "dell7920",
+    hostId: "test-host-001",
     sessionId: "host-session-001",
     ownerId: "agent0",
     windowId: "window-editor",
@@ -891,7 +891,7 @@ test("P16 rejects artifact-kind confusion and windowless reusable UI element evi
 
   const windowlessRequest: DesktopObservationRequest = {
     kind: "UI_SNAPSHOT",
-    hostId: "dell7920",
+    hostId: "test-host-001",
     sessionId: "host-session-001",
     ownerId: "agent0",
     scope: { displayIds: [0], displayTopologyEpoch: "topology-001" },
@@ -960,7 +960,7 @@ test("P16 rejects artifact-kind confusion and windowless reusable UI element evi
 test("P16 current-head binding rejects tampered observation receipts", async () => {
   const request: DesktopObservationRequest = {
     kind: "UI_SNAPSHOT",
-    hostId: "dell7920",
+    hostId: "test-host-001",
     sessionId: "host-session-001",
     ownerId: "agent0",
     windowId: "window-editor",
@@ -1015,7 +1015,7 @@ test("P16 wait-for is exact-window scoped with bounded timeout/interval and one 
     () =>
       normalizeDesktopObservationRequest({
         kind: "WAIT_FOR",
-        hostId: "dell7920",
+        hostId: "test-host-001",
         sessionId: "host-session-001",
         ownerId: "agent0",
         windowId: "window-editor",
@@ -1028,7 +1028,7 @@ test("P16 wait-for is exact-window scoped with bounded timeout/interval and one 
 
   const request: DesktopObservationRequest = {
     kind: "WAIT_FOR",
-    hostId: "dell7920",
+    hostId: "test-host-001",
     sessionId: "host-session-001",
     ownerId: "agent0",
     windowId: "window-editor",
@@ -1080,7 +1080,7 @@ test("P16B wait timeout is valid evidence and preserves cancellation delivery tr
   const statuses = ["REQUESTED", "DELIVERED", "CONFIRMED_QUIESCENT", "UNCERTAIN"] as const;
   for (const cancellationStatus of statuses) {
     const request: DesktopObservationRequest = {
-      kind: "WAIT_FOR", hostId: "dell7920", sessionId: "host-session-001", ownerId: "agent0",
+      kind: "WAIT_FOR", hostId: "test-host-001", sessionId: "host-session-001", ownerId: "agent0",
       windowId: "window-editor", condition: "text_exists", text: "Never appears", timeoutMs: 2_000, intervalMs: 250,
     };
     const ctx = makeContext(request);
@@ -1099,7 +1099,7 @@ test("P16B wait timeout is valid evidence and preserves cancellation delivery tr
     assert.equal(outcome.receipt.cancellationStatus, cancellationStatus);
   }
   const invalid = makeContext({
-    kind: "WAIT_FOR", hostId: "dell7920", sessionId: "host-session-001", ownerId: "agent0",
+    kind: "WAIT_FOR", hostId: "test-host-001", sessionId: "host-session-001", ownerId: "agent0",
     windowId: "window-editor", condition: "active_window", timeoutMs: 2_000, intervalMs: 250,
   });
   const invalidOutcome = await observeGovernedDesktop({
@@ -1114,7 +1114,7 @@ test("P16B wait timeout is valid evidence and preserves cancellation delivery tr
 
 test("P16B wait must fit inside the remaining P15 lease lifetime", async () => {
   const request: DesktopObservationRequest = {
-    kind: "WAIT_FOR", hostId: "dell7920", sessionId: "host-session-001", ownerId: "agent0",
+    kind: "WAIT_FOR", hostId: "test-host-001", sessionId: "host-session-001", ownerId: "agent0",
     windowId: "window-editor", condition: "active_window", timeoutMs: 60_001, intervalMs: 500,
   };
   const ctx = makeContext(request);
@@ -1131,7 +1131,7 @@ test("P16B wait must fit inside the remaining P15 lease lifetime", async () => {
 
 test("P16B numeric displays require topology epoch and adapter topology must match", async () => {
   assert.throws(() => normalizeDesktopObservationRequest({
-    kind: "SCREENSHOT", hostId: "dell7920", sessionId: "host-session-001", ownerId: "agent0", scope: { displayIds: [0] },
+    kind: "SCREENSHOT", hostId: "test-host-001", sessionId: "host-session-001", ownerId: "agent0", scope: { displayIds: [0] },
   }), /requires exact displayTopologyEpoch/);
   const ctx = makeContext(screenshotRequest());
   const adapter: GovernedDesktopObservationAdapter = {
@@ -1149,7 +1149,7 @@ test("P16B numeric displays require topology epoch and adapter topology must mat
 
 test("P16B provider restart invalidates live window and element evidence without another capture", async () => {
   const request: DesktopObservationRequest = {
-    kind: "UI_SNAPSHOT", hostId: "dell7920", sessionId: "host-session-001", ownerId: "agent0",
+    kind: "UI_SNAPSHOT", hostId: "test-host-001", sessionId: "host-session-001", ownerId: "agent0",
     windowId: "window-editor", includeScreenshot: false, useDom: false, maxElements: 10, maxWallClockMs: 5_000,
   };
   const ctx = makeContext(request);

@@ -71,7 +71,7 @@ function createLease(
 ) {
   return createHostConnectorSessionLease(
     {
-      hostId: "dell7920",
+      hostId: "test-host-001",
       sessionId: "host-session-001",
       ownerId: "agent0",
       allowedCapabilities,
@@ -88,7 +88,7 @@ function use(
   capabilityId: HostConnectorActionCapabilityId,
 ) {
   return {
-    hostId: "dell7920",
+    hostId: "test-host-001",
     sessionId: "host-session-001",
     ownerId: "agent0",
     capabilityId,
@@ -137,7 +137,7 @@ test("P15 exact host/session/owner identity and current action authority produce
     useRuntime(lease.leaseSha256),
   );
 
-  assert.equal(binding.hostId, "dell7920");
+  assert.equal(binding.hostId, "test-host-001");
   assert.equal(binding.sessionId, "host-session-001");
   assert.equal(binding.ownerId, "agent0");
   assert.equal(binding.capabilityId, "host:filesystem-read");
