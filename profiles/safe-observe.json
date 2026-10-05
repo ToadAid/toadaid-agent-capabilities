@@ -1,0 +1,75 @@
+{
+  "schemaVersion": "toadaid.agent-capability-profile.v1",
+  "profileId": "safe-observe",
+  "summary": "Initial generic-agent observation profile. Requested integration shape only; grants no authority.",
+  "activationDefault": "OFF",
+  "installationGrantsAuthority": false,
+  "capabilityGrants": [],
+  "requestedCapabilities": [
+    {
+      "capabilityId": "browser:evidence",
+      "packageSurfaces": [
+        "browser-runtime",
+        "policy",
+        "contracts",
+        "invocation",
+        "budget",
+        "replay"
+      ],
+      "replayGuidance": "CONTRACT_AND_ADAPTER_DEFINED",
+      "hostMutation": false
+    },
+    {
+      "capabilityId": "workspace:snapshot",
+      "packageSurfaces": [
+        "workspace-history",
+        "policy",
+        "contracts",
+        "invocation",
+        "budget",
+        "replay"
+      ],
+      "replayGuidance": "PRESERVE_NON_REPLAYABLE_WHERE_DURABLE_HISTORY_MAY_CHANGE",
+      "hostMutation": false
+    },
+    {
+      "capabilityId": "workspace:diff",
+      "packageSurfaces": [
+        "workspace-history",
+        "policy",
+        "contracts",
+        "invocation",
+        "budget",
+        "replay"
+      ],
+      "replayGuidance": "PRESERVE_ADAPTER_DECLARED_REPLAY_CLASS",
+      "hostMutation": false
+    },
+    {
+      "capabilityId": "host:process-read",
+      "packageSurfaces": [
+        "host-session",
+        "host-services",
+        "policy",
+        "contracts",
+        "invocation",
+        "budget",
+        "replay"
+      ],
+      "replayGuidance": "SAFE_READ_WHEN_EXACT_PROVIDER_CONTRACT_IS_READ_ONLY",
+      "hostMutation": false
+    }
+  ],
+  "explicitlyExcludedAuthorityClasses": [
+    "COMMAND_EXECUTION",
+    "FILESYSTEM_WRITE",
+    "PROCESS_STOP_OR_SIGNAL",
+    "DESKTOP_INTERACTION",
+    "CLIPBOARD_WRITE",
+    "REGISTRY_WRITE",
+    "APP_LAUNCH",
+    "SECRET_MATERIALIZATION",
+    "DEPLOYMENT_OR_GIT_MUTATION",
+    "WALLET_TRADING_OR_ECONOMIC_EXECUTION"
+  ]
+}

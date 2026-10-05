@@ -153,6 +153,24 @@ Git/checkout consumption is supported through the build boundary, and capability
 
 See [`docs/d2-capability-specific-package-surfaces.md`](docs/d2-capability-specific-package-surfaces.md).
 
+## Generic-agent installation
+
+For an unrelated Node.js agent, start with [`INSTALL_AGENT.md`](INSTALL_AGENT.md).
+Generic Install P1 provides a no-authority bootstrap, a provider-neutral host
+integration contract, a bounded coding-agent install prompt, and the initial
+[`safe-observe`](profiles/safe-observe.json) profile.
+
+The installer produces an exact local package artifact plus a host-owned
+integration manifest. It does **not** publish to npm, mutate the host, create
+capability grants, bind providers, or switch any capability to `ALLOW`.
+
+See:
+
+- [`INSTALL_AGENT.md`](INSTALL_AGENT.md)
+- [`docs/GENERIC_AGENT_INTEGRATION.md`](docs/GENERIC_AGENT_INTEGRATION.md)
+- [`docs/AGENT_INSTALL_PROMPT.md`](docs/AGENT_INSTALL_PROMPT.md)
+- [`docs/CAPABILITY_PROFILES.md`](docs/CAPABILITY_PROFILES.md)
+
 ## Verification
 
 From a checkout:
