@@ -9,6 +9,7 @@ const expectedExports = [
   "./budget",
   "./contracts",
   "./replay",
+  "./workspace-history",
   "./modules",
   "./host-session",
   "./desktop-observation",

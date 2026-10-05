@@ -22,6 +22,7 @@ const declaredSurfaces = [
   "./contracts",
   "./modules",
   "./host-session",
+  "./workspace-history",
   "./desktop-observation",
   "./desktop-interaction",
   "./host-services",
