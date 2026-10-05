@@ -55,7 +55,7 @@ accidental npm publication.
 Use the repository installer to create an exact local package artifact:
 
 ```bash
-npm ci
+npm ci --include=dev
 bin/toadaid-capabilities-install-agent --check-only
 bin/toadaid-capabilities-install-agent --profile safe-observe
 ```

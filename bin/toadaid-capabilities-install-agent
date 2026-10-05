@@ -204,7 +204,7 @@ main() {
   fi
 
   if [[ ! -x "$REPO_ROOT/node_modules/.bin/tsc" ]]; then
-    fail "checkout build dependencies are missing; run npm ci in the checkout first"
+    fail "checkout build dependencies are missing; run npm ci --include=dev in the checkout first"
     return 2
   fi
 
@@ -347,11 +347,25 @@ NODE
     return 2
   fi
 
-  cp "$REPO_ROOT/package.json" "$stage/package.json"
+  # The staged package.json carries NO lifecycle scripts: some npm versions
+  # (npm 10) still run `prepare` for `npm pack <dir>` despite --ignore-scripts.
+  # --ignore-scripts below is kept as defense in depth only. The repository
+  # package.json is never modified.
+  node - "$REPO_ROOT/package.json" "$stage/package.json" <<'NODE'
+const fs = require('node:fs')
+const [source, target] = process.argv.slice(2)
+const pkg = JSON.parse(fs.readFileSync(source, 'utf8'))
+delete pkg.scripts
+fs.writeFileSync(target, `${JSON.stringify(pkg, null, 2)}\n`, { flag: 'wx' })
+const staged = JSON.parse(fs.readFileSync(target, 'utf8'))
+if (Object.hasOwn(staged, 'scripts')) process.exitCode = 2
+NODE
+  stage_pkg_rc=$?
   cp "$REPO_ROOT/README.md" "$stage/README.md"
+  readme_rc=$?
   cp "$REPO_ROOT/LICENSE" "$stage/LICENSE"
-  copy_rc=$?
-  if [[ $copy_rc -ne 0 ]]; then
+  license_rc=$?
+  if [[ $stage_pkg_rc -ne 0 || $readme_rc -ne 0 || $license_rc -ne 0 ]]; then
     rm -rf "$tmp_root"
     fail "cannot stage package metadata"
     return 2

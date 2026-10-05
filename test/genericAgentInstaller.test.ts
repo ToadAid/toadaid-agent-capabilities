@@ -1,13 +1,109 @@
 import assert from 'node:assert/strict'
-import { spawnSync } from 'node:child_process'
+import { spawnSync, type SpawnSyncReturns } from 'node:child_process'
+import crypto from 'node:crypto'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
+import zlib from 'node:zlib'
 
 const root = process.cwd()
 const installer = path.join(root, 'bin', 'toadaid-capabilities-install-agent')
 const profilePath = path.join(root, 'profiles', 'safe-observe.json')
+
+const SAFE_OBSERVE_IDS = [
+  'browser:evidence',
+  'workspace:snapshot',
+  'workspace:diff',
+  'host:process-read',
+]
+
+/**
+ * CAP-WIN-P1: in CI the installer E2E must execute or FAIL. It may only be
+ * skipped (explicitly, never silently passed) on a local, uncommitted checkout.
+ */
+const installerE2ERequired =
+  process.env.TOADAID_REQUIRE_INSTALLER_E2E === '1' || process.env.CI === 'true'
+
+const readJson = <T>(file: string): T => JSON.parse(fs.readFileSync(file, 'utf8')) as T
+
+const sha256 = (bytes: Buffer): string => crypto.createHash('sha256').update(bytes).digest('hex')
+
+function gitStatus(cwd: string): string {
+  const status = spawnSync('git', ['status', '--porcelain=v1', '--untracked-files=all'], {
+    cwd,
+    encoding: 'utf8',
+  })
+  assert.equal(status.status, 0, status.stderr)
+  return status.stdout.trim()
+}
+
+function runInstaller(
+  script: string,
+  args: string[],
+  env: NodeJS.ProcessEnv = process.env,
+): SpawnSyncReturns<string> {
+  return spawnSync('bash', [script, ...args], { cwd: root, encoding: 'utf8', env })
+}
+
+/** Minimal ustar reader: returns one regular file's bytes from a .tgz. */
+function readTgzEntry(tgzPath: string, entryName: string): Buffer | null {
+  const tar = zlib.gunzipSync(fs.readFileSync(tgzPath))
+  for (let offset = 0; offset + 512 <= tar.length; ) {
+    const header = tar.subarray(offset, offset + 512)
+    if (header.every((byte) => byte === 0)) break
+    const field = (start: number, end: number): string =>
+      header.subarray(start, end).toString('latin1').replace(/\0.*$/s, '')
+    const prefix = field(345, 500)
+    const name = prefix ? `${prefix}/${field(0, 100)}` : field(0, 100)
+    const size = Number.parseInt(field(124, 136).trim() || '0', 8)
+    const body = tar.subarray(offset + 512, offset + 512 + size)
+    if (name === entryName) return Buffer.from(body)
+    offset += 512 + Math.ceil(size / 512) * 512
+  }
+  return null
+}
+
+/**
+ * Puts a recording `npm` first on PATH. It forwards every call to the real
+ * npm unchanged and, for `npm pack`, records argv, the staged package.json as
+ * it existed at pack time, and npm's stderr (where lifecycle banners appear).
+ */
+function createNpmShim(): { dir: string; logDir: string; env: NodeJS.ProcessEnv } {
+  const located = spawnSync('bash', ['-c', 'command -v npm'], { encoding: 'utf8' })
+  assert.equal(located.status, 0, 'npm must be on PATH')
+  const realNpm = located.stdout.trim()
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'toadaid-cap-npm-shim-'))
+  const logDir = path.join(dir, 'log')
+  fs.mkdirSync(logDir)
+  const shim = path.join(dir, 'bin', 'npm')
+  fs.mkdirSync(path.dirname(shim))
+  fs.writeFileSync(
+    shim,
+    [
+      '#!/usr/bin/env bash',
+      'if [[ "$1" == "pack" ]]; then',
+      '  printf \'%s\\n\' "$@" >>"$SHIM_LOG_DIR/pack-argv.txt"',
+      '  if [[ -f "$2/package.json" ]]; then cp "$2/package.json" "$SHIM_LOG_DIR/staged-package.json"; fi',
+      '  "$REAL_NPM" "$@" 2>>"$SHIM_LOG_DIR/pack-stderr.txt"',
+      '  exit $?',
+      'fi',
+      'exec "$REAL_NPM" "$@"',
+      '',
+    ].join('\n'),
+    { mode: 0o755 },
+  )
+  return {
+    dir,
+    logDir,
+    env: {
+      ...process.env,
+      PATH: `${path.dirname(shim)}${path.delimiter}${process.env.PATH ?? ''}`,
+      REAL_NPM: realNpm,
+      SHIM_LOG_DIR: logDir,
+    },
+  }
+}
 
 test('safe-observe profile is a zero-authority request bundle', () => {
   const profile = JSON.parse(fs.readFileSync(profilePath, 'utf8')) as {
@@ -26,12 +122,7 @@ test('safe-observe profile is a zero-authority request bundle', () => {
   assert.deepEqual(profile.capabilityGrants, [])
   assert.deepEqual(
     profile.requestedCapabilities.map((entry) => entry.capabilityId),
-    [
-      'browser:evidence',
-      'workspace:snapshot',
-      'workspace:diff',
-      'host:process-read',
-    ],
+    SAFE_OBSERVE_IDS,
   )
 })
 
@@ -105,38 +196,120 @@ test('unknown profile refuses rather than widening scope', () => {
   assert.match(refused.stderr, /unsupported profile/i)
 })
 
-test('clean CI checkout can produce a local artifact without host authority', () => {
-  const gitStatus = spawnSync(
-    'git',
-    ['status', '--porcelain=v1', '--untracked-files=all'],
-    { cwd: root, encoding: 'utf8' },
-  )
-  assert.equal(gitStatus.status, 0, gitStatus.stderr)
+test('CAP-WIN-P1: package-lock.json is tracked and matches the declared dependency graph', () => {
+  const tracked = spawnSync('git', ['ls-files', '--error-unmatch', 'package-lock.json'], {
+    cwd: root,
+    encoding: 'utf8',
+  })
+  assert.equal(tracked.status, 0, `package-lock.json must be tracked: ${tracked.stderr}`)
 
-  // Local source-cut runs are intentionally dirty before commit, so this
-  // end-to-end install assertion activates only once CI checks the committed
-  // tree (or any other genuinely clean checkout).
-  if (gitStatus.stdout.trim() !== '') return
-
-  const stateRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'toadaid-cap-install-'))
-  try {
-    const installed = spawnSync(
-      'bash',
-      [
-        installer,
-        '--profile',
-        'safe-observe',
-        '--state-root',
-        stateRoot,
-      ],
+  const pkg = readJson<{
+    name: string
+    version: string
+    devDependencies: Record<string, string>
+    peerDependencies: Record<string, string>
+  }>(path.join(root, 'package.json'))
+  const lock = readJson<{
+    name: string
+    version: string
+    lockfileVersion: number
+    packages: Record<
+      string,
       {
-        cwd: root,
-        encoding: 'utf8',
-      },
-    )
+        version?: string
+        resolved?: string
+        integrity?: string
+        devDependencies?: Record<string, string>
+        peerDependencies?: Record<string, string>
+      }
+    >
+  }>(path.join(root, 'package-lock.json'))
+
+  assert.equal(lock.name, pkg.name)
+  assert.equal(lock.version, pkg.version)
+  assert.equal(lock.lockfileVersion, 3)
+  const rootEntry = lock.packages['']
+  assert.ok(rootEntry, 'lockfile root entry missing')
+  assert.deepEqual(rootEntry.devDependencies, pkg.devDependencies)
+  assert.deepEqual(rootEntry.peerDependencies, pkg.peerDependencies)
+
+  for (const [name, version] of Object.entries(pkg.devDependencies)) {
+    const locked = lock.packages[`node_modules/${name}`]
+    assert.ok(locked, `${name} missing from lockfile`)
+    assert.equal(locked.version, version, `${name} must be locked at its exact declared version`)
+    assert.match(locked.resolved ?? '', /^https:\/\/registry\.npmjs\.org\//, `${name} must resolve from the npm registry`)
+    assert.match(locked.integrity ?? '', /^sha512-/, `${name} must carry sha512 integrity`)
+  }
+})
+
+test('CAP-WIN-P1: CI installs with npm ci --include=dev under NODE_ENV=production and requires the E2E', () => {
+  const ci = fs.readFileSync(path.join(root, '.github', 'workflows', 'ci.yml'), 'utf8')
+  assert.match(ci, /npm ci --include=dev/)
+  assert.match(ci, /NODE_ENV:\s*production/)
+  assert.match(ci, /TOADAID_REQUIRE_INSTALLER_E2E:\s*"1"/)
+  assert.match(ci, /INSTALLER_E2E_EXECUTED = YES/)
+  assert.doesNotMatch(ci, /run:\s*npm install\b/)
+
+  for (const doc of ['INSTALL_AGENT.md', path.join('docs', 'GENERIC_AGENT_INTEGRATION.md')]) {
+    const text = fs.readFileSync(path.join(root, doc), 'utf8')
+    assert.match(text, /npm ci --include=dev/, `${doc} must document the canonical dependency install`)
+    assert.doesNotMatch(text, /^npm ci$/m, `${doc} must not document bare npm ci`)
+  }
+})
+
+test('CAP-WIN-P1: dirty checkout still refuses artifact installation (fail-closed)', () => {
+  const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'toadaid-cap-dirty-'))
+  try {
+    const checkout = path.join(scratch, 'checkout')
+    const cloned = spawnSync('git', ['clone', '-q', '--no-hardlinks', root, checkout], { encoding: 'utf8' })
+    assert.equal(cloned.status, 0, cloned.stderr)
+    // test the working-tree installer + profile, not whatever HEAD holds
+    fs.copyFileSync(installer, path.join(checkout, 'bin', 'toadaid-capabilities-install-agent'))
+    fs.copyFileSync(profilePath, path.join(checkout, 'profiles', 'safe-observe.json'))
+    fs.symlinkSync(path.join(root, 'node_modules'), path.join(checkout, 'node_modules'), 'dir')
+    fs.writeFileSync(path.join(checkout, 'UNCOMMITTED.txt'), 'dirty\n')
+    assert.notEqual(gitStatus(checkout), '')
+
+    const stateRoot = path.join(scratch, 'state')
+    const refused = runInstaller(path.join(checkout, 'bin', 'toadaid-capabilities-install-agent'), [
+      '--profile',
+      'safe-observe',
+      '--state-root',
+      stateRoot,
+    ])
+    assert.equal(refused.status, 2, refused.stderr)
+    assert.match(refused.stderr, /refusing artifact installation from a dirty checkout/)
+    assert.equal(refused.stdout, '')
+    assert.equal(fs.existsSync(stateRoot), false, 'a refused install must not create state')
+  } finally {
+    fs.rmSync(scratch, { recursive: true, force: true })
+  }
+})
+
+test('CAP-WIN-P1: installer E2E executes from the clean canonical checkout (never silently skipped)', async (t) => {
+  const dirty = gitStatus(root)
+  if (dirty !== '') {
+    if (installerE2ERequired) {
+      assert.fail(
+        `INSTALLER_E2E_EXECUTED = NO: the installer E2E is required here but the checkout is dirty:\n${dirty}`,
+      )
+    }
+    t.diagnostic('INSTALLER_E2E_EXECUTED = NO (local uncommitted checkout; CI requires execution)')
+    t.skip('INSTALLER_E2E_EXECUTED = NO: local checkout has uncommitted changes')
+    return
+  }
+
+  const shim = createNpmShim()
+  const stateRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'toadaid-cap-install-'))
+  const head = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).stdout.trim()
+  const repoPkg = readJson<Record<string, unknown>>(path.join(root, 'package.json'))
+  const npmVersion = spawnSync('bash', ['-c', 'npm --version'], { encoding: 'utf8' }).stdout.trim()
+
+  try {
+    const installed = runInstaller(installer, ['--profile', 'safe-observe', '--state-root', stateRoot], shim.env)
     assert.equal(installed.status, 0, installed.stderr)
 
-    const result = JSON.parse(installed.stdout) as {
+    type InstallResult = {
       status: string
       artifactPath: string
       artifactSha256: string
@@ -147,32 +320,109 @@ test('clean CI checkout can produce a local artifact without host authority', ()
       hostMutationPerformed: boolean
       npmPublicationPerformed: boolean
     }
+    const result = JSON.parse(installed.stdout) as InstallResult
 
-    assert.equal(result.status, 'READY_FOR_HOST_WIRING')
-    assert.equal(result.activation, 'OFF')
-    assert.deepEqual(result.capabilityGrants, [])
-    assert.equal(result.installationGrantsAuthority, false)
-    assert.equal(result.hostMutationPerformed, false)
-    assert.equal(result.npmPublicationPerformed, false)
-    assert.match(result.artifactSha256, /^[0-9a-f]{64}$/)
-    assert.equal(fs.existsSync(result.artifactPath), true)
-    assert.equal(fs.existsSync(result.manifestPath), true)
+    await t.test('installer reaches READY_FOR_HOST_WIRING', () => {
+      assert.equal(result.status, 'READY_FOR_HOST_WIRING')
+      assert.equal(result.hostMutationPerformed, false)
+      assert.equal(result.npmPublicationPerformed, false)
+    })
 
-    const manifest = JSON.parse(fs.readFileSync(result.manifestPath, 'utf8')) as {
-      activation: string
-      capabilityGrants: unknown[]
-      providerBindings: Record<string, unknown>
-      installationGrantsAuthority: boolean
-      package: { private: boolean; artifactSha256: string }
-    }
+    await t.test('P1-9 #9: installer generates the exact artifact', () => {
+      assert.equal(fs.existsSync(result.artifactPath), true)
+      assert.equal(path.basename(result.artifactPath), `toadaid-agent-capabilities-${String(repoPkg.version)}-${head.slice(0, 12)}.tgz`)
+      assert.match(result.artifactSha256, /^[0-9a-f]{64}$/)
+      assert.equal(sha256(fs.readFileSync(result.artifactPath)), result.artifactSha256)
+    })
 
-    assert.equal(manifest.activation, 'OFF')
-    assert.deepEqual(manifest.capabilityGrants, [])
-    assert.deepEqual(manifest.providerBindings, {})
-    assert.equal(manifest.installationGrantsAuthority, false)
-    assert.equal(manifest.package.private, true)
-    assert.equal(manifest.package.artifactSha256, result.artifactSha256)
+    await t.test('P1-9 #10-13: manifest generated; OFF, [] grants, no installation authority', () => {
+      assert.equal(fs.existsSync(result.manifestPath), true)
+      const manifest = readJson<{
+        checkout: { head: string; cleanAtInstall: boolean }
+        package: { private: boolean; artifactSha256: string; artifactPath: string }
+        requestedProfile: { profileId: string; requestedCapabilities: string[] }
+        activation: string
+        capabilityGrants: unknown[]
+        providerBindings: Record<string, unknown>
+        authorityOwner: string
+        installationGrantsAuthority: boolean
+      }>(result.manifestPath)
+      assert.equal(manifest.checkout.head, head)
+      assert.equal(manifest.checkout.cleanAtInstall, true)
+      assert.equal(manifest.package.private, true)
+      assert.equal(manifest.package.artifactSha256, result.artifactSha256)
+      assert.equal(manifest.package.artifactPath, result.artifactPath)
+      assert.equal(manifest.requestedProfile.profileId, 'safe-observe')
+      assert.deepEqual(manifest.requestedProfile.requestedCapabilities, SAFE_OBSERVE_IDS)
+      assert.equal(manifest.activation, 'OFF')
+      assert.equal(result.activation, 'OFF')
+      assert.deepEqual(manifest.capabilityGrants, [])
+      assert.deepEqual(result.capabilityGrants, [])
+      assert.deepEqual(manifest.providerBindings, {})
+      assert.equal(manifest.authorityOwner, 'HOST')
+      assert.equal(manifest.installationGrantsAuthority, false)
+      assert.equal(result.installationGrantsAuthority, false)
+    })
+
+    await t.test('P1-9 #5/#6: npm pack received a staged package.json with NO scripts, and succeeded', () => {
+      const argv = fs.readFileSync(path.join(shim.logDir, 'pack-argv.txt'), 'utf8').split('\n')
+      assert.equal(argv[0], 'pack')
+      assert.ok(argv.includes('--ignore-scripts'), '--ignore-scripts kept as defense in depth')
+      const staged = readJson<Record<string, unknown>>(path.join(shim.logDir, 'staged-package.json'))
+      assert.equal(Object.hasOwn(staged, 'scripts'), false, 'staged package.json must not contain scripts')
+      const { scripts: _scripts, ...expectedStaged } = repoPkg
+      assert.deepEqual(staged, expectedStaged, 'only scripts may be removed from the staged package.json')
+      assert.ok(Object.hasOwn(repoPkg, 'scripts'), 'repository package.json keeps its scripts')
+      t.diagnostic(`npm --version used for the artifact pack: ${npmVersion}`)
+    })
+
+    await t.test('P1-9 #7: the repository prepare/build hook is not invoked by the artifact pack', () => {
+      const stderrLog = path.join(shim.logDir, 'pack-stderr.txt')
+      const packStderr = fs.existsSync(stderrLog) ? fs.readFileSync(stderrLog, 'utf8') : ''
+      assert.doesNotMatch(packStderr, /^> .+ (prepare|prepack|postpack|build)$/m, packStderr)
+      assert.doesNotMatch(packStderr, /tsc -p tsconfig\.build\.json/, packStderr)
+    })
+
+    await t.test('P1-9 #5: the generated .tgz package.json contains no scripts field', () => {
+      const packed = readTgzEntry(result.artifactPath, 'package/package.json')
+      assert.ok(packed, 'artifact must contain package/package.json')
+      const packedPkg = JSON.parse(packed.toString('utf8')) as Record<string, unknown>
+      assert.equal(Object.hasOwn(packedPkg, 'scripts'), false)
+      assert.equal(packedPkg.name, repoPkg.name)
+      assert.equal(packedPkg.version, repoPkg.version)
+      assert.equal(packedPkg.private, true)
+      assert.deepEqual(packedPkg.exports, repoPkg.exports)
+    })
+
+    await t.test('P1-9 #16: identical rerun is idempotent', () => {
+      const artifactBefore = fs.readFileSync(result.artifactPath)
+      const manifestBefore = fs.readFileSync(result.manifestPath)
+      const rerun = runInstaller(installer, ['--profile', 'safe-observe', '--state-root', stateRoot], shim.env)
+      assert.equal(rerun.status, 0, rerun.stderr)
+      const again = JSON.parse(rerun.stdout) as InstallResult
+      assert.equal(again.artifactSha256, result.artifactSha256)
+      assert.equal(again.artifactPath, result.artifactPath)
+      assert.ok(fs.readFileSync(result.artifactPath).equals(artifactBefore))
+      assert.ok(fs.readFileSync(result.manifestPath).equals(manifestBefore))
+    })
+
+    await t.test('P1-9 #17: conflicting existing output is refused (exit 2) and left untouched', () => {
+      const conflicting = Buffer.concat([fs.readFileSync(result.manifestPath), Buffer.from('\n')])
+      fs.writeFileSync(result.manifestPath, conflicting)
+      const refused = runInstaller(installer, ['--profile', 'safe-observe', '--state-root', stateRoot], shim.env)
+      assert.equal(refused.status, 2, refused.stderr)
+      assert.match(refused.stderr, /refusing to overwrite different existing file/)
+      assert.ok(fs.readFileSync(result.manifestPath).equals(conflicting))
+    })
+
+    await t.test('the canonical checkout is still clean after the installer ran', () => {
+      assert.equal(gitStatus(root), '')
+    })
+
+    t.diagnostic('INSTALLER_E2E_EXECUTED = YES')
+    console.log('INSTALLER_E2E_EXECUTED = YES')
   } finally {
     fs.rmSync(stateRoot, { recursive: true, force: true })
+    fs.rmSync(shim.dir, { recursive: true, force: true })
   }
 })

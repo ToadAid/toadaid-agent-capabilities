@@ -16,6 +16,25 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - run: npm install
+      - name: Toolchain baseline
+        run: |
+          node --version
+          npm --version
+      - name: Install exact locked dependencies (NODE_ENV=production must not drop build dependencies)
+        env:
+          NODE_ENV: production
+        run: npm ci --include=dev
+      - name: Prove build dependency present and checkout clean after npm ci
+        run: |
+          test -x node_modules/.bin/tsc
+          git status --porcelain=v1 --untracked-files=all
+          test -z "$(git status --porcelain=v1 --untracked-files=all)"
       - run: npx playwright install --with-deps chromium
-      - run: npm test
+      - name: Prove checkout still clean before tests
+        run: test -z "$(git status --porcelain=v1 --untracked-files=all)"
+      - name: Test (installer E2E is required; it must execute or fail, never silently skip)
+        env:
+          TOADAID_REQUIRE_INSTALLER_E2E: "1"
+        run: npm test 2>&1 | tee "$RUNNER_TEMP/test-output.txt"
+      - name: Prove the installer E2E executed
+        run: grep -F "INSTALLER_E2E_EXECUTED = YES" "$RUNNER_TEMP/test-output.txt"

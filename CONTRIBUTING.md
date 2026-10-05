@@ -30,7 +30,7 @@ Requirements:
 From a checkout:
 
 ```bash
-npm install
+npm ci --include=dev
 npm test
 npm run package:check
 npm run v1:proof
