@@ -33,7 +33,9 @@ MODEL REQUEST != APPROVAL
 - Node.js 22 or newer
 - npm
 - a persistent checkout of this repository
-- checkout build dependencies installed with `npm ci`
+- checkout build dependencies installed with `npm ci --include=dev` (from the
+  committed `package-lock.json`; `--include=dev` keeps the build toolchain even
+  when `NODE_ENV=production`)
 
 The package remains intentionally `"private": true` during alpha. The installer
 creates a local `.tgz` package artifact from the exact checkout; it does not
@@ -44,7 +46,7 @@ publish anything to npm.
 From a clean repository checkout:
 
 ```bash
-npm ci
+npm ci --include=dev
 bin/toadaid-capabilities-install-agent --check-only
 bin/toadaid-capabilities-install-agent --profile safe-observe
 ```
