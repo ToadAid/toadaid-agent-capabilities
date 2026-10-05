@@ -68,6 +68,35 @@ The installer writes:
 
 `--check-only` performs no installation writes.
 
+### Pin the exact reviewed commit
+
+When you know the exact commit you reviewed or were told to install, pass it
+so the installer fails closed on any other checkout:
+
+```bash
+bin/toadaid-capabilities-install-agent --check-only --expect-commit <reviewed-40-hex-commit>
+bin/toadaid-capabilities-install-agent --profile safe-observe --expect-commit <reviewed-40-hex-commit>
+```
+
+`--expect-commit` accepts only a full 40-character hex commit id (no branch
+names, tags, `HEAD`, or abbreviations) and refuses with exit code 2 unless the
+checkout `HEAD` is exactly that commit. Take the value from the review or
+release note, not from `git rev-parse HEAD` of the checkout being checked.
+
+### One installer core
+
+`bin/toadaid-capabilities-install-agent` is a thin POSIX entrypoint. All
+installer semantics — options, profile policy, checkout pinning, the
+dirty-checkout refusal, artifact rules, the manifest, and every refusal — live
+in one cross-platform Node core, `bin/toadaid-capabilities-install-agent.mjs`.
+There is no platform-specific installer policy.
+
+The package metadata (`package.json`, `README.md`, `LICENSE`) and the
+`safe-observe` profile are read from the committed git objects of the exact
+checkout `HEAD`, not from mutable working-tree files. The artifact contains no
+source maps, so the same commit produces the same artifact sha256 regardless
+of the checkout path.
+
 The result remains:
 
 ```text
@@ -134,7 +163,8 @@ bin/toadaid-capabilities-install-agent \
   --profile safe-observe \
   --state-root /var/lib/my-agent/toadaid-capabilities \
   --artifact-root /var/lib/my-agent/toadaid-capabilities/artifacts \
-  --manifest /var/lib/my-agent/toadaid-capabilities/integration.json
+  --manifest /var/lib/my-agent/toadaid-capabilities/integration.json \
+  --expect-commit <reviewed-40-hex-commit>
 ```
 
 The installer is create-once/idempotent for exact generated files. It refuses

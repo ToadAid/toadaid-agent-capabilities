@@ -61,7 +61,9 @@ bin/toadaid-capabilities-install-agent --profile safe-observe
 ```
 
 Then install the emitted `.tgz` into the host project. The installer itself does
-not modify the host.
+not modify the host. To fail closed on any checkout other than the exact
+reviewed commit, add `--expect-commit <reviewed-40-hex-commit>` (see
+[`INSTALL_AGENT.md`](../INSTALL_AGENT.md)).
 
 ## Central-dispatch requirement
 

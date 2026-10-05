@@ -44,6 +44,8 @@ Non-negotiable boundaries:
 Installation:
 1. Confirm the ToadAid Agent Capabilities checkout identity and run:
      bin/toadaid-capabilities-install-agent --check-only
+   When the operator gave you an exact reviewed commit, add
+   --expect-commit <that full 40-character commit id> to both commands.
 2. From a clean checkout run:
      bin/toadaid-capabilities-install-agent --profile safe-observe
 3. Read the generated host-owned integration manifest.
