@@ -1,0 +1,181 @@
+# Install ToadAid Agent Capabilities for a Generic Agent
+
+ToadAid Agent Capabilities is a provider-neutral TypeScript capability and
+governance spine. The generic-agent installer prepares an exact local package
+artifact and a host-owned integration manifest. It does **not** redesign the
+host agent or grant it new authority.
+
+The installation law is:
+
+```text
+code available
+    !=
+capability authorized
+    !=
+provider attached
+    !=
+action permitted
+```
+
+In short:
+
+```text
+PROFILE != POLICY
+INSTALLED != ALLOWED
+ADAPTER PRESENT != AUTHORIZED
+MODEL REQUEST != APPROVAL
+```
+
+## Requirements
+
+- Linux, macOS, or WSL with a POSIX shell
+- Git
+- Node.js 22 or newer
+- npm
+- a persistent checkout of this repository
+- checkout build dependencies installed with `npm ci`
+
+The package remains intentionally `"private": true` during alpha. The installer
+creates a local `.tgz` package artifact from the exact checkout; it does not
+publish anything to npm.
+
+## Quick install
+
+From a clean repository checkout:
+
+```bash
+npm ci
+bin/toadaid-capabilities-install-agent --check-only
+bin/toadaid-capabilities-install-agent --profile safe-observe
+```
+
+The default state root is:
+
+```text
+~/.local/state/toadaid-agent-capabilities/
+```
+
+The installer writes:
+
+```text
+~/.local/state/toadaid-agent-capabilities/
+├── agent-integration.json
+└── artifacts/
+    └── toadaid-agent-capabilities-<version>-<commit>.tgz
+```
+
+`--check-only` performs no installation writes.
+
+The result remains:
+
+```text
+activation = OFF
+capabilityGrants = []
+installationGrantsAuthority = false
+providerBindings = {}
+```
+
+## Install into the host project
+
+The bootstrap deliberately does not mutate an unrelated host repository.
+After reviewing the generated manifest, install the exact local artifact from
+the host project using that host's package manager, for example:
+
+```bash
+npm install --save-exact /absolute/path/to/toadaid-agent-capabilities-<version>-<commit>.tgz
+```
+
+Then follow [`docs/GENERIC_AGENT_INTEGRATION.md`](docs/GENERIC_AGENT_INTEGRATION.md).
+
+## Initial profile: `safe-observe`
+
+Generic Install P1 ships one requested integration profile:
+
+```text
+browser:evidence
+workspace:snapshot
+workspace:diff
+host:process-read
+```
+
+The profile starts `OFF` and grants nothing. `workspace:snapshot` and
+`workspace:diff` are observation/history capabilities but are not classified
+as replay-safe merely because they do not mutate the project workspace; durable
+history validation/maintenance semantics remain separately governed.
+
+See [`docs/CAPABILITY_PROFILES.md`](docs/CAPABILITY_PROFILES.md) and
+[`profiles/safe-observe.json`](profiles/safe-observe.json).
+
+## What installation deliberately does not do
+
+The installer does **not**:
+
+- change host identity, memory, prompts, provider/model stack, or lifecycle;
+- add capability grants to host policy;
+- switch any capability to `ALLOW`;
+- attach a browser, desktop, filesystem, process, shell, wallet, or secret
+  provider;
+- expose command execution, file write, process stop, desktop interaction, or
+  economic authority;
+- create approval decisions;
+- read or copy host secrets;
+- modify an unrelated host repository;
+- restart a host runtime; or
+- publish this package to npm.
+
+Installation is software distribution plus configuration evidence only.
+
+## Custom paths
+
+```bash
+bin/toadaid-capabilities-install-agent \
+  --profile safe-observe \
+  --state-root /var/lib/my-agent/toadaid-capabilities \
+  --artifact-root /var/lib/my-agent/toadaid-capabilities/artifacts \
+  --manifest /var/lib/my-agent/toadaid-capabilities/integration.json
+```
+
+The installer is create-once/idempotent for exact generated files. It refuses
+to overwrite a different existing artifact or manifest and refuses symlink
+targets for persistent installation files/directories.
+
+## Host activation
+
+Activation is host-owned:
+
+1. **OFF** — package may be installed, but the host does not dispatch these
+   capabilities.
+2. **BLOCK** — the host recognizes the capability but current policy refuses
+   authority.
+3. **ALLOW** — only after the host has a current policy grant, exact provider
+   binding, required contract compatibility, replay/budget law, and tests.
+
+A profile is not an activation state and cannot change host policy.
+
+## Agent-assisted installation
+
+If a coding agent will wire this package into another agent, give it
+[`docs/AGENT_INSTALL_PROMPT.md`](docs/AGENT_INSTALL_PROMPT.md).
+
+That prompt requires the coding agent to preserve the host's existing authority
+boundaries, begin with `OFF`/`BLOCK`, use the provider-neutral package surfaces,
+and stop before any `ALLOW` transition unless the operator separately asks.
+
+## Verification before ALLOW
+
+Before a host enables any requested capability, it should prove at minimum:
+
+- OFF causes no provider entry;
+- BLOCK causes no provider entry;
+- current policy is re-resolved immediately before provider dispatch;
+- provider identity/generation is exactly bound;
+- contract compatibility is exact;
+- replay classification is explicit;
+- budget accounting is explicit;
+- model-visible receipts are code-owned rather than model-fabricated;
+- a capability cannot widen another capability's authority;
+- runtime mode changes fail closed; and
+- failure leaves host identity, policy, secrets, and unrelated tools unchanged.
+
+The package being installed successfully is never evidence that those host
+integration requirements have been satisfied.
