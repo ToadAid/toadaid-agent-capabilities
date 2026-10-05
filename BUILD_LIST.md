@@ -190,7 +190,7 @@ Checkbox law: mark an item complete only when the implementation is landed on ca
   - prove B1 stale-DOM refusal and explicit degraded evidence without launching a live browser or using network fixtures
   - no wallet, trading, irreversible economic action, provider mutation, push, or merge occurs in the graduation scenario
   - completion marker is exactly `V1_AGENT0_VERTICAL_OK`
-  - 2026-09-25 TNG clean-room proof emitted `PACKAGE_DISTRIBUTION_OK exports=6 files=146` then `V1_AGENT0_VERTICAL_OK` with `packageResolvedFromConsumer=true`, `secretHandleOnly=true`, `nonReplayableDisposition=NEW_INVOCATION_REQUIRED`, and post-restart browser authority `BLOCK`
+  - 2026-09-25 canonical clean-room proof emitted `PACKAGE_DISTRIBUTION_OK exports=6 files=146` then `V1_AGENT0_VERTICAL_OK` with `packageResolvedFromConsumer=true`, `secretHandleOnly=true`, `nonReplayableDisposition=NEW_INVOCATION_REQUIRED`, and post-restart browser authority `BLOCK`
   - capability library is integration-ready after this clean-room vertical proof closure
 
 ## Post-graduation integration lane

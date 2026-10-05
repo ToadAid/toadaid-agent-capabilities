@@ -117,7 +117,7 @@ function observationFixture(
 ) {
   const observationRequest: DesktopObservationRequest = {
     kind: "UI_SNAPSHOT",
-    hostId: "dell7920",
+    hostId: "test-host-001",
     sessionId: "host-session-001",
     ownerId: "agent0",
     scope,
@@ -133,7 +133,7 @@ function observationFixture(
       schemaVersion:
         "toadaid.desktop-observed-element-ref.v1",
       elementId: "button-save",
-      hostId: "dell7920",
+      hostId: "test-host-001",
       sessionId: "host-session-001",
       windowId: "window-editor",
       observationEpoch: "observation-001",
@@ -155,7 +155,7 @@ function observationFixture(
       "host:ui-snapshot" as const,
     invocationId: "observation-invocation-001",
     runId: "run-001",
-    hostId: "dell7920",
+    hostId: "test-host-001",
     sessionId: "host-session-001",
     ownerId: "agent0",
     leaseSha256: "3".repeat(64),
@@ -294,7 +294,7 @@ function observationFixture(
   observationHeadRuntime.publishCurrentObservationHead({
     schemaVersion:
       "toadaid.desktop-observation-head.v1",
-    hostId: "dell7920",
+    hostId: "test-host-001",
     sessionId: "host-session-001",
     windowId: "window-editor",
     observationEpoch: "observation-001",
@@ -320,7 +320,7 @@ function clickRequest(): DesktopPointerClickRequest {
   const observation = observationFixture();
   return {
     kind: "POINTER_CLICK",
-    hostId: "dell7920",
+    hostId: "test-host-001",
     sessionId: "host-session-001",
     ownerId: "agent0",
     observation: observation.observation,
@@ -510,7 +510,7 @@ function makeContext(
 
   const lease = createHostConnectorSessionLease(
     {
-      hostId: "dell7920",
+      hostId: "test-host-001",
       sessionId: "host-session-001",
       ownerId: "agent0",
       allowedCapabilities: [capabilityId],
@@ -691,7 +691,7 @@ test("P17 successful element click crosses P15/P3/C1/H1/X1/Q1 and invalidates th
   const head =
     ctx.observationHeadRuntime
       .resolveCurrentObservationHead({
-        hostId: "dell7920",
+        hostId: "test-host-001",
         sessionId: "host-session-001",
         windowId: "window-editor",
       });
@@ -751,7 +751,7 @@ test("P17B typed provider refusal stays before dispatch without budget or observ
   const head =
     ctx.observationHeadRuntime
       .resolveCurrentObservationHead({
-        hostId: "dell7920",
+        hostId: "test-host-001",
         sessionId: "host-session-001",
         windowId: "window-editor",
       });
@@ -875,7 +875,7 @@ test("P17 refuses stale P16 observation before adapter entry", async () => {
   ctx.observationHeadRuntime.publishCurrentObservationHead({
     schemaVersion:
       "toadaid.desktop-observation-head.v1",
-    hostId: "dell7920",
+    hostId: "test-host-001",
     sessionId: "host-session-001",
     windowId: "window-editor",
     observationEpoch: "newer-observation",
@@ -926,7 +926,7 @@ test("P17 atomically claims the exact P16 head and refuses a freshness race befo
       base.publishCurrentObservationHead({
         schemaVersion:
           "toadaid.desktop-observation-head.v1",
-        hostId: "dell7920",
+        hostId: "test-host-001",
         sessionId: "host-session-001",
         windowId: "window-editor",
         observationEpoch:
@@ -963,7 +963,7 @@ test("P16B/P17 coordinate click consumes exact coordinate-space and topology geo
   const fixture = observationFixture();
   const inside: DesktopPointerClickRequest = {
     kind: "POINTER_CLICK",
-    hostId: "dell7920",
+    hostId: "test-host-001",
     sessionId: "host-session-001",
     ownerId: "agent0",
     observation: fixture.observation,
@@ -1017,7 +1017,7 @@ test("P16B/P17 coordinate click consumes exact coordinate-space and topology geo
     observationFixture(displayScope);
   const displayRequest: DesktopPointerClickRequest = {
     kind: "POINTER_CLICK",
-    hostId: "dell7920",
+    hostId: "test-host-001",
     sessionId: "host-session-001",
     ownerId: "agent0",
     observation: displayFixture.observation,
@@ -1072,7 +1072,7 @@ test("P17 ordinary text input is separate from secret/password entry and receipt
     "draft-title-that-must-not-enter-receipt";
   const request: DesktopTextInputRequest = {
     kind: "TEXT_INPUT",
-    hostId: "dell7920",
+    hostId: "test-host-001",
     sessionId: "host-session-001",
     ownerId: "agent0",
     observation: fixture.observation,
@@ -1440,7 +1440,7 @@ test("P17 shortcut keys are bounded and normalized", () => {
   const normalized =
     normalizeDesktopInteractionRequest({
       kind: "SHORTCUT",
-      hostId: "dell7920",
+      hostId: "test-host-001",
       sessionId: "host-session-001",
       ownerId: "agent0",
       observation: fixture.observation,
@@ -1455,7 +1455,7 @@ test("P17 shortcut keys are bounded and normalized", () => {
     () =>
       normalizeDesktopInteractionRequest({
         kind: "SHORTCUT",
-        hostId: "dell7920",
+        hostId: "test-host-001",
         sessionId: "host-session-001",
         ownerId: "agent0",
         observation: fixture.observation,
@@ -1478,7 +1478,7 @@ test("P17 shortcut keys are bounded and normalized", () => {
     () =>
       normalizeDesktopInteractionRequest({
         kind: "SHORTCUT",
-        hostId: "dell7920",
+        hostId: "test-host-001",
         sessionId: "host-session-001",
         ownerId: "agent0",
         observation: fixture.observation,
@@ -1491,7 +1491,7 @@ test("P17 shortcut keys are bounded and normalized", () => {
     () =>
       normalizeDesktopInteractionRequest({
         kind: "SHORTCUT",
-        hostId: "dell7920",
+        hostId: "test-host-001",
         sessionId: "host-session-001",
         ownerId: "agent0",
         observation: fixture.observation,
