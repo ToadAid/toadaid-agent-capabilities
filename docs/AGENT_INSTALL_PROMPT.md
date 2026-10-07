@@ -46,6 +46,8 @@ Installation:
      bin/toadaid-capabilities-install-agent --check-only
    When the operator gave you an exact reviewed commit, add
    --expect-commit <that full 40-character commit id> to both commands.
+   On native Windows use bin\toadaid-capabilities-install-agent.cmd with the
+   same options (no Git Bash, WSL, or PowerShell script needed).
 2. From a clean checkout run:
      bin/toadaid-capabilities-install-agent --profile safe-observe
 3. Read the generated host-owned integration manifest.

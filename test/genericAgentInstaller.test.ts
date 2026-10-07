@@ -12,6 +12,8 @@ const installer = path.join(root, 'bin', 'toadaid-capabilities-install-agent')
 /** CAP-WIN-P2: the ONE installer policy lives in this Node core; entrypoints only invoke it. */
 const installerCore = path.join(root, 'bin', 'toadaid-capabilities-install-agent.mjs')
 const profilePath = path.join(root, 'profiles', 'safe-observe.json')
+/** CAP-WIN-P3: the ONE native Windows transport entrypoint (cmd.exe; no PowerShell script). */
+const windowsWrapper = path.join(root, 'bin', 'toadaid-capabilities-install-agent.cmd')
 
 const SAFE_OBSERVE_IDS = [
   'browser:evidence',
@@ -66,6 +68,59 @@ function readTgz(tgzPath: string): Map<string, Buffer> {
   return entries
 }
 
+/** CAP-WIN-P3: tar header metadata (type, octal mode, mtime) per entry name. */
+function readTgzHeaders(tgzPath: string): Map<string, { type: string; mode: string; mtime: number }> {
+  const tar = zlib.gunzipSync(fs.readFileSync(tgzPath))
+  const headers = new Map<string, { type: string; mode: string; mtime: number }>()
+  for (let offset = 0; offset + 512 <= tar.length; ) {
+    const header = tar.subarray(offset, offset + 512)
+    if (header.every((byte) => byte === 0)) break
+    const field = (start: number, end: number): string =>
+      header.subarray(start, end).toString('latin1').replace(/\0.*$/s, '')
+    const prefix = field(345, 500)
+    const name = prefix ? `${prefix}/${field(0, 100)}` : field(0, 100)
+    const size = Number.parseInt(field(124, 136).trim() || '0', 8)
+    headers.set(name, {
+      type: field(156, 157) || '0',
+      mode: field(100, 108).trim(),
+      mtime: Number.parseInt(field(136, 148).trim() || '0', 8),
+    })
+    offset += 512 + Math.ceil(size / 512) * 512
+  }
+  return headers
+}
+
+/**
+ * CAP-WIN-P3: evaluate the ONE core's exported platform-law functions in a
+ * child Node process. Importing the core must never run the installer; the
+ * trailing `--help` keeps any accidental run harmless.
+ */
+function evaluateCore(body: string, env: NodeJS.ProcessEnv = {}): unknown {
+  const script = [
+    "import { pathToFileURL } from 'node:url'",
+    `const core = await import(pathToFileURL(${JSON.stringify(installerCore)}).href)`,
+    'const out = await (async () => {',
+    body,
+    '})()',
+    "process.stdout.write('\\n@@RESULT@@' + JSON.stringify(out))",
+  ].join('\n')
+  const scratchHome = fs.mkdtempSync(path.join(os.tmpdir(), 'toadaid-cap-eval-'))
+  try {
+    const evaluated = spawnSync(process.execPath, ['--input-type=module', '-e', script, '_', '--help'], {
+      cwd: scratchHome,
+      encoding: 'utf8',
+      env: { ...process.env, HOME: scratchHome, XDG_STATE_HOME: path.join(scratchHome, 'xdg'), ...env },
+    })
+    assert.equal(evaluated.status, 0, evaluated.stderr)
+    assert.doesNotMatch(evaluated.stdout, /Usage: bin\/toadaid-capabilities-install-agent/, 'importing the core must not run the installer')
+    const marker = evaluated.stdout.lastIndexOf('@@RESULT@@')
+    assert.ok(marker >= 0, `core evaluation produced no result:\n${evaluated.stdout}\n${evaluated.stderr}`)
+    return JSON.parse(evaluated.stdout.slice(marker + '@@RESULT@@'.length))
+  } finally {
+    fs.rmSync(scratchHome, { recursive: true, force: true })
+  }
+}
+
 function readTgzEntry(tgzPath: string, entryName: string): Buffer | null {
   return readTgz(tgzPath).get(entryName) ?? null
 }
@@ -98,6 +153,9 @@ function scratchCheckout(prefix: string): { scratch: string; checkout: string } 
 function copyWorkingInstaller(checkout: string): void {
   for (const file of ['toadaid-capabilities-install-agent', 'toadaid-capabilities-install-agent.mjs']) {
     fs.copyFileSync(path.join(root, 'bin', file), path.join(checkout, 'bin', file))
+  }
+  if (fs.existsSync(windowsWrapper)) {
+    fs.copyFileSync(windowsWrapper, path.join(checkout, 'bin', path.basename(windowsWrapper)))
   }
 }
 
@@ -417,6 +475,162 @@ test('CAP-WIN-P2: package/profile metadata is read from the pinned git blob, not
   }
 })
 
+test('CAP-WIN-P3: native Windows state-root law lives in the ONE core (LOCALAPPDATA; XDG_STATE_HOME ignored; POSIX unchanged)', () => {
+  const result = evaluateCore(`
+    const law = (platform, env) => core.resolveDefaultStateRoot({ platform, env })
+    return {
+      winLocal: law('win32', { LOCALAPPDATA: 'C:\\\\Users\\\\toad\\\\AppData\\\\Local', XDG_STATE_HOME: '/tempting/xdg', HOME: '/tempting/home' }),
+      winNoHome: law('win32', { LOCALAPPDATA: 'D:\\\\Local App Data' }),
+      winMissing: law('win32', { XDG_STATE_HOME: 'C:\\\\tempting', HOME: 'C:\\\\Users\\\\toad' }),
+      winEmpty: law('win32', { LOCALAPPDATA: '' }),
+      winRelative: law('win32', { LOCALAPPDATA: 'AppData\\\\Local' }),
+      posixXdg: law('linux', { HOME: '/home/toad', XDG_STATE_HOME: '/state' }),
+      posixHome: law('linux', { HOME: '/home/toad' }),
+      posixNoHome: law('linux', { XDG_STATE_HOME: '/state' }),
+      darwinIgnoresLocalAppData: law('darwin', { HOME: '/Users/toad', LOCALAPPDATA: 'C:\\\\x' }),
+    }
+  `) as Record<string, { ok: boolean; stateRoot?: string; reason?: string }>
+
+  assert.deepEqual(result.winLocal, { ok: true, stateRoot: 'C:\\Users\\toad\\AppData\\Local\\toadaid-agent-capabilities' })
+  assert.deepEqual(result.winNoHome, { ok: true, stateRoot: 'D:\\Local App Data\\toadaid-agent-capabilities' })
+  for (const key of ['winMissing', 'winEmpty']) {
+    assert.equal(result[key]?.ok, false, key)
+    assert.match(String(result[key]?.reason), /LOCALAPPDATA must be set on Windows unless --state-root is given/, key)
+  }
+  assert.equal(result.winRelative?.ok, false)
+  assert.match(String(result.winRelative?.reason), /LOCALAPPDATA must be an absolute path/)
+  assert.deepEqual(result.posixXdg, { ok: true, stateRoot: '/state/toadaid-agent-capabilities' })
+  assert.deepEqual(result.posixHome, { ok: true, stateRoot: '/home/toad/.local/state/toadaid-agent-capabilities' })
+  assert.deepEqual(result.posixNoHome, { ok: false, reason: 'HOME must be set' })
+  assert.deepEqual(result.darwinIgnoresLocalAppData, { ok: true, stateRoot: '/Users/toad/.local/state/toadaid-agent-capabilities' })
+})
+
+test('CAP-WIN-P3: Windows discovery honors PATH + PATHEXT and stays separate from invocation', () => {
+  const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'toadaid-cap-pathext-'))
+  try {
+    const gitDir = path.join(scratch, 'Git', 'cmd')
+    const nodeDir = path.join(scratch, 'nodejs')
+    const decoyDir = path.join(scratch, 'decoy')
+    for (const dir of [gitDir, nodeDir, decoyDir]) fs.mkdirSync(dir, { recursive: true })
+    fs.writeFileSync(path.join(gitDir, 'git.exe'), 'MZ')
+    fs.writeFileSync(path.join(decoyDir, 'npm'), '#!/bin/sh\n', { mode: 0o755 }) // POSIX shim Windows cannot run
+    fs.writeFileSync(path.join(decoyDir, 'npm.ps1'), '# blocked by ExecutionPolicy\n')
+    fs.writeFileSync(path.join(nodeDir, 'npm.cmd'), '@echo off\n')
+    fs.writeFileSync(path.join(nodeDir, 'node.exe'), 'MZ')
+    const cliDir = path.join(nodeDir, 'node_modules', 'npm', 'bin')
+    fs.mkdirSync(cliDir, { recursive: true })
+    fs.writeFileSync(path.join(cliDir, 'npm-cli.js'), "#!/usr/bin/env node\nrequire('../lib/cli.js')(process)\n")
+    fs.writeFileSync(path.join(nodeDir, 'node_modules', 'npm', 'package.json'), JSON.stringify({ name: 'npm', version: '10.9.4' }))
+    const brokenDir = path.join(scratch, 'broken')
+    fs.mkdirSync(path.join(brokenDir, 'node_modules', 'npm', 'bin'), { recursive: true })
+    fs.writeFileSync(path.join(brokenDir, 'npm.cmd'), '@echo off\n')
+    fs.writeFileSync(path.join(brokenDir, 'node_modules', 'npm', 'bin', 'npm-cli.js'), '// not npm\n')
+    fs.writeFileSync(path.join(brokenDir, 'node_modules', 'npm', 'package.json'), JSON.stringify({ name: 'not-npm', version: '1.0.0' }))
+
+    const env = { PATH: [decoyDir, gitDir, nodeDir].join(';'), PATHEXT: '.COM;.EXE;.BAT;.CMD;.VBS;.JS' }
+    const result = evaluateCore(`
+      const env = ${JSON.stringify(env)}
+      const find = (name, e = env) => core.resolveCommand(name, { platform: 'win32', env: e })
+      return {
+        git: find('git'),
+        npm: find('npm'),
+        node: find('node'),
+        missing: find('pwsh-only-tool'),
+        defaultPathext: find('git', { PATH: env.PATH }),
+        gitDirect: core.isWindowsDirectExecutable(find('git')),
+        npmDirect: core.isWindowsDirectExecutable(find('npm')),
+        npmCli: core.locateWindowsNpmCli(find('npm')),
+        brokenCli: core.locateWindowsNpmCli(${JSON.stringify(path.join(brokenDir, 'npm.cmd'))}),
+        absentCli: core.locateWindowsNpmCli(${JSON.stringify(path.join(gitDir, 'git.exe'))}),
+      }
+    `) as Record<string, unknown>
+
+    assert.equal(result.git, path.join(gitDir, 'git.exe'))
+    assert.equal(result.npm, path.join(nodeDir, 'npm.cmd'), 'extensionless and .ps1 npm shims are not Windows executables')
+    assert.equal(result.node, path.join(nodeDir, 'node.exe'))
+    assert.equal(result.missing, null)
+    assert.equal(result.defaultPathext, path.join(gitDir, 'git.exe'), 'PATHEXT defaults to .COM;.EXE;.BAT;.CMD')
+    assert.equal(result.gitDirect, true)
+    assert.equal(result.npmDirect, false, 'a discovered npm.cmd is never executed directly')
+    assert.deepEqual(result.npmCli, { ok: true, cliPath: path.join(cliDir, 'npm-cli.js') })
+    assert.equal((result.brokenCli as { ok: boolean }).ok, false, 'npm-cli.js must belong to the npm package')
+    assert.equal((result.absentCli as { ok: boolean }).ok, false)
+  } finally {
+    fs.rmSync(scratch, { recursive: true, force: true })
+  }
+})
+
+test('CAP-WIN-P3: the core launches git, npm and tsc without any shell; tsc runs through Node on every platform', () => {
+  const core = fs.readFileSync(installerCore, 'utf8')
+  assert.doesNotMatch(core, /\bshell\s*:/, 'no shell option anywhere in the core')
+  assert.doesNotMatch(core, /\bexec(Sync)?\s*\(/, 'no exec/execSync (shell-backed) launches')
+  assert.doesNotMatch(core, /\bbash\b|cmd\.exe|powershell|pwsh/i, 'the core never invokes a shell program')
+  assert.doesNotMatch(core, /node_modules['"],\s*['"]\.bin/, 'the core must not depend on node_modules/.bin shims')
+  assert.match(core, /'typescript',\s*'bin',\s*'tsc'/, 'the package-owned compiler JS is the build entrypoint')
+  assert.match(core, /spawnSync\(\s*process\.execPath/, 'compiler (and Windows npm) run through the current Node')
+})
+
+test('CAP-WIN-P3: build-dependency check validates the compiler JS that will actually run, not node_modules/.bin', () => {
+  const { scratch, checkout } = scratchCheckout('toadaid-cap-tsc-target-')
+  try {
+    copyWorkingInstaller(checkout)
+    // Replace the shared node_modules with a fake one: an executable .bin/tsc
+    // shim exists, but the typescript package it points at does not.
+    fs.rmSync(path.join(checkout, 'node_modules'))
+    fs.mkdirSync(path.join(checkout, 'node_modules', '.bin'), { recursive: true })
+    fs.writeFileSync(path.join(checkout, 'node_modules', '.bin', 'tsc'), '#!/bin/sh\nexit 0\n', { mode: 0o755 })
+    const checked = runInstaller(path.join(checkout, 'bin', 'toadaid-capabilities-install-agent'), [
+      '--check-only',
+      '--state-root',
+      path.join(scratch, 'state'),
+    ])
+    assert.equal(checked.status, 2, `a dangling .bin/tsc must not pass the dependency check:\n${checked.stdout}`)
+    assert.match(checked.stderr, /checkout build dependencies are missing; run npm ci --include=dev in the checkout first/)
+    assert.equal(checked.stdout, '')
+  } finally {
+    fs.rmSync(scratch, { recursive: true, force: true })
+  }
+})
+
+test('CAP-WIN-P3: the native Windows entrypoint is ONE thin .cmd transport wrapper', () => {
+  assert.equal(fs.existsSync(windowsWrapper), true, 'bin/toadaid-capabilities-install-agent.cmd must exist')
+  assert.equal(fs.existsSync(path.join(root, 'bin', 'toadaid-capabilities-install-agent.ps1')), false, 'no .ps1 wrapper in P3')
+  const lines = fs
+    .readFileSync(windowsWrapper, 'utf8')
+    .split(/\r?\n/)
+    .filter((line) => line.trim() !== '' && !/^\s*(@?rem\b|::)/i.test(line))
+  assert.ok(lines.length <= 15, `.cmd wrapper must stay thin (${lines.length} code lines)`)
+  const code = lines.join('\n')
+  assert.match(code, /"%~dp0toadaid-capabilities-install-agent\.mjs"/, 'invokes the ONE core next to itself')
+  assert.match(code, /%\*/, 'forwards argv unchanged')
+  assert.match(code, /exit \/b/i, 'preserves the exit code')
+  for (const policy of ['safe-observe', 'npm', 'activation', 'capabilityGrants', 'sha256', 'manifest', 'git', 'LOCALAPPDATA', 'XDG', 'HOME', 'state-root', 'tsc', 'powershell', 'bash']) {
+    assert.equal(code.toLowerCase().includes(policy.toLowerCase()), false, `.cmd wrapper must not own installer policy: ${policy}`)
+  }
+  const attributes = fs.readFileSync(path.join(root, '.gitattributes'), 'utf8')
+  assert.match(attributes, /^\*\.cmd\s+text\s+eol=crlf$/m, '.cmd must be checked out with CRLF on every platform')
+  assert.match(attributes, /^bin\/toadaid-capabilities-install-agent\s+text\s+eol=lf$/m, 'the POSIX entrypoint stays LF')
+})
+
+test('CAP-WIN-P3: CI proves native Windows through the .cmd entrypoint and enforces Linux == Windows artifact sha256', () => {
+  const ci = fs.readFileSync(path.join(root, '.github', 'workflows', 'ci.yml'), 'utf8')
+  const windowsJob = ci.slice(ci.indexOf('\n  windows:'), ci.indexOf('\n  parity:'))
+  assert.match(windowsJob, /runs-on:\s*windows-latest/)
+  assert.match(windowsJob, /shell:\s*cmd/, 'native cmd.exe shell, not Git Bash')
+  assert.doesNotMatch(windowsJob, /shell:\s*(bash|sh|pwsh|powershell)\b/)
+  assert.doesNotMatch(windowsJob, /\bwsl\b|\bbash\b/i)
+  assert.match(windowsJob, /bin\\toadaid-capabilities-install-agent\.cmd/)
+  assert.match(windowsJob, /npm ci --include=dev/)
+  assert.match(windowsJob, /TOADAID_REQUIRE_INSTALLER_E2E:\s*"1"/)
+  assert.match(windowsJob, /windowsNativeInstaller\.test\.js/)
+  assert.match(windowsJob, /INSTALLER_E2E_EXECUTED = YES/)
+  assert.match(windowsJob, /--expect-commit %GITHUB_SHA%/)
+  const parityJob = ci.slice(ci.indexOf('\n  parity:'))
+  assert.match(parityJob, /needs:\s*\[test, windows\]/)
+  assert.match(parityJob, /linux\.sha256/)
+  assert.match(parityJob, /windows\.sha256/)
+})
+
 test('CAP-WIN-P1: installer E2E executes from the clean canonical checkout (never silently skipped)', async (t) => {
   const dirty = gitStatus(root)
   if (dirty !== '') {
@@ -541,6 +755,16 @@ test('CAP-WIN-P1: installer E2E executes from the clean canonical checkout (neve
         assert.equal(name.includes(root), false, `${name} must not embed the checkout path`)
         assert.equal(entries.get(name)?.includes(root), false, `${name} content must not embed the checkout path`)
       }
+    })
+
+    await t.test('P3: staged package metadata is canonical (files 0644, fixed mtime) so artifact bytes match Windows', () => {
+      const headers = readTgzHeaders(result.artifactPath)
+      assert.ok(headers.size > 0)
+      for (const [name, header] of headers) {
+        assert.equal(header.type, '0', `${name} must be a regular file entry`)
+        assert.equal(header.mode, '000644', `${name} must carry the canonical staged file mode`)
+      }
+      assert.equal(new Set([...headers.values()].map((header) => header.mtime)).size, 1, 'one fixed mtime for every entry')
     })
 
     await t.test('P2: manifest profile identity is the pinned git blob', () => {

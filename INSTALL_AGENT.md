@@ -28,7 +28,8 @@ MODEL REQUEST != APPROVAL
 
 ## Requirements
 
-- Linux, macOS, or WSL with a POSIX shell
+- Linux, macOS, or WSL with a POSIX shell, or native Windows (`cmd.exe`;
+  no Git Bash, WSL, or PowerShell script execution needed)
 - Git
 - Node.js 22 or newer
 - npm
@@ -68,6 +69,36 @@ The installer writes:
 
 `--check-only` performs no installation writes.
 
+### Native Windows
+
+From a clean checkout, in `cmd.exe` (or by calling the same `.cmd` file from
+PowerShell — it does not depend on PowerShell execution policy):
+
+```bat
+npm ci --include=dev
+bin\toadaid-capabilities-install-agent.cmd --check-only
+bin\toadaid-capabilities-install-agent.cmd --profile safe-observe
+```
+
+The default state root on Windows is:
+
+```text
+%LOCALAPPDATA%\toadaid-agent-capabilities\
+```
+
+Precedence on Windows: an explicit `--state-root` wins; otherwise
+`%LOCALAPPDATA%\toadaid-agent-capabilities`; otherwise the installer refuses
+(exit 2). `HOME` is not required, and `XDG_STATE_HOME` is ignored on native
+Windows so a value inherited from other tooling cannot redirect installer
+state. On Linux/macOS/WSL the default is unchanged.
+
+The `.cmd` file is transport only. On Windows the core discovers `git.exe`
+and `npm` through `PATH` + `PATHEXT`, never runs anything through a shell,
+runs npm as `node <npm>\node_modules\npm\bin\npm-cli.js`, and runs the
+compiler as `node node_modules\typescript\bin\tsc` (as on every platform).
+On NTFS the installer does not write ACLs; the state files inherit the ACL of
+their parent directory (`%LOCALAPPDATA%` is private to the user by default).
+
 ### Pin the exact reviewed commit
 
 When you know the exact commit you reviewed or were told to install, pass it
@@ -85,8 +116,9 @@ release note, not from `git rev-parse HEAD` of the checkout being checked.
 
 ### One installer core
 
-`bin/toadaid-capabilities-install-agent` is a thin POSIX entrypoint. All
-installer semantics — options, profile policy, checkout pinning, the
+`bin/toadaid-capabilities-install-agent` (POSIX) and
+`bin\toadaid-capabilities-install-agent.cmd` (native Windows) are thin
+transport entrypoints. All installer semantics — options, profile policy, checkout pinning, the
 dirty-checkout refusal, artifact rules, the manifest, and every refusal — live
 in one cross-platform Node core, `bin/toadaid-capabilities-install-agent.mjs`.
 There is no platform-specific installer policy.
@@ -94,8 +126,10 @@ There is no platform-specific installer policy.
 The package metadata (`package.json`, `README.md`, `LICENSE`) and the
 `safe-observe` profile are read from the committed git objects of the exact
 checkout `HEAD`, not from mutable working-tree files. The artifact contains no
-source maps, so the same commit produces the same artifact sha256 regardless
-of the checkout path.
+source maps and every staged file is packed with the canonical mode `0644`
+(directories `0755`), so the same commit produces the same artifact sha256
+regardless of the checkout path, the process umask, or the platform: Linux and
+native Windows produce byte-identical artifacts (enforced in CI).
 
 The result remains:
 

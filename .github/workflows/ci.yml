@@ -38,3 +38,95 @@ jobs:
         run: npm test 2>&1 | tee "$RUNNER_TEMP/test-output.txt"
       - name: Prove the installer E2E executed
         run: grep -F "INSTALLER_E2E_EXECUTED = YES" "$RUNNER_TEMP/test-output.txt"
+      - name: Parity install through the POSIX entrypoint (exact pin)
+        run: |
+          bin/toadaid-capabilities-install-agent --expect-commit "$GITHUB_SHA" --state-root "$RUNNER_TEMP/parity state" > "$RUNNER_TEMP/parity-result.json"
+          mkdir -p "$RUNNER_TEMP/parity"
+          node -p "require(process.argv[1]).artifactSha256" "$RUNNER_TEMP/parity-result.json" > "$RUNNER_TEMP/parity/linux.sha256"
+          cat "$RUNNER_TEMP/parity/linux.sha256"
+          test -z "$(git status --porcelain=v1 --untracked-files=all)"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: parity-linux
+          path: ${{ runner.temp }}/parity/linux.sha256
+          if-no-files-found: error
+
+  # CAP-WIN-P3: native Windows proof. cmd.exe only: no Git Bash, no WSL, no
+  # PowerShell script. Every installer run goes through the .cmd entrypoint.
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: cmd
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Toolchain baseline
+        run: |
+          node --version
+          call npm --version
+          git --version
+      - name: Install exact locked dependencies (NODE_ENV=production must not drop build dependencies)
+        env:
+          NODE_ENV: production
+        run: call npm ci --include=dev
+      - name: Prove the compiler JS is present and the checkout is clean after npm ci
+        run: |
+          if not exist node_modules\typescript\bin\tsc exit /b 1
+          git status --porcelain=v1 --untracked-files=all > "%RUNNER_TEMP%\status.txt"
+          type "%RUNNER_TEMP%\status.txt"
+          for %%F in ("%RUNNER_TEMP%\status.txt") do if %%~zF neq 0 exit /b 1
+      - name: Native .cmd entrypoint check-only with the exact pin
+        run: |
+          call bin\toadaid-capabilities-install-agent.cmd --check-only --expect-commit %GITHUB_SHA%
+          if errorlevel 1 exit /b 1
+      - name: Native Windows installer proof (installer E2E is required; it must execute or fail)
+        env:
+          TOADAID_REQUIRE_INSTALLER_E2E: "1"
+        run: |
+          call npm run test:build
+          if errorlevel 1 exit /b 1
+          node --test dist/test/windowsNativeInstaller.test.js > "%RUNNER_TEMP%\windows-test-output.txt" 2>&1
+          set TEST_EXIT=%ERRORLEVEL%
+          type "%RUNNER_TEMP%\windows-test-output.txt"
+          exit /b %TEST_EXIT%
+      - name: Prove the native installer E2E executed
+        run: findstr /C:"INSTALLER_E2E_EXECUTED = YES" "%RUNNER_TEMP%\windows-test-output.txt"
+      - name: Parity install through the .cmd entrypoint (exact pin)
+        run: |
+          call bin\toadaid-capabilities-install-agent.cmd --expect-commit %GITHUB_SHA% --state-root "%RUNNER_TEMP%\parity state" > "%RUNNER_TEMP%\parity-result.json"
+          if errorlevel 1 exit /b 1
+          mkdir "%RUNNER_TEMP%\parity"
+          node -p "require(process.argv[1]).artifactSha256" "%RUNNER_TEMP%\parity-result.json" > "%RUNNER_TEMP%\parity\windows.sha256"
+          if errorlevel 1 exit /b 1
+          type "%RUNNER_TEMP%\parity\windows.sha256"
+          git status --porcelain=v1 --untracked-files=all > "%RUNNER_TEMP%\status-after.txt"
+          for %%F in ("%RUNNER_TEMP%\status-after.txt") do if %%~zF neq 0 exit /b 1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: parity-windows
+          path: ${{ runner.temp }}\parity\windows.sha256
+          if-no-files-found: error
+
+  # CAP-WIN-P3: same commit -> byte-identical governed artifact on both platforms.
+  parity:
+    needs: [test, windows]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: parity-*
+          path: parity
+          merge-multiple: true
+      - name: Linux artifact sha256 must equal native Windows artifact sha256
+        run: |
+          linux="$(tr -d '\r\n' < parity/linux.sha256)"
+          windows="$(tr -d '\r\n' < parity/windows.sha256)"
+          echo "Linux   artifact sha256: $linux"
+          echo "Windows artifact sha256: $windows"
+          test -n "$linux"
+          test "$linux" = "$windows"
