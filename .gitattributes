@@ -1,0 +1,4 @@
+# CAP-WIN-P3: entrypoint line endings are fixed on every platform, whatever
+# core.autocrlf says. cmd.exe needs CRLF; the POSIX entrypoint needs LF.
+*.cmd text eol=crlf
+bin/toadaid-capabilities-install-agent text eol=lf

@@ -1,9 +1,16 @@
 #!/usr/bin/env node
-// ToadAid Agent Capabilities — generic-agent installer core (CAP-WIN-P2)
+// ToadAid Agent Capabilities — generic-agent installer core (CAP-WIN-P2/P3)
 //
 // This file is the ONE installer policy. Every platform entrypoint (the POSIX
-// bash wrapper today, a native Windows wrapper later) only locates Node and
+// shell wrapper and the native Windows .cmd wrapper) only locates Node and
 // invokes this core; none of them may add, remove, or reinterpret policy.
+// Platform differences that are unavoidable (where the default state root
+// lives, how an executable is discovered and launched) are reconciled here,
+// in one place, and nowhere else.
+//
+// No process is ever launched through a shell. git is spawned directly, the
+// TypeScript compiler always runs as `node <checkout>/node_modules/typescript/
+// bin/tsc`, and on Windows npm runs as `node <npm>/bin/npm-cli.js`.
 //
 // It prepares an exact local package artifact plus a host-owned integration
 // manifest. It DOES NOT wire a host, grant capability authority, modify host
@@ -67,24 +74,136 @@ function sha256(bytes) {
   return crypto.createHash('sha256').update(bytes).digest('hex')
 }
 
-function commandAvailable(name) {
-  for (const dir of (process.env.PATH ?? '').split(path.delimiter)) {
-    if (dir === '') continue
-    const candidate = path.join(dir, name)
-    try {
-      if (fs.statSync(candidate).isFile()) {
-        fs.accessSync(candidate, fs.constants.X_OK)
-        return true
-      }
-    } catch {
-      // keep searching PATH
-    }
+const STATE_DIRECTORY_NAME = 'toadaid-agent-capabilities'
+
+/** Canonical staged package modes: same tar metadata, same artifact bytes, on every platform. */
+export const CANONICAL_STAGED_FILE_MODE = 0o644
+export const CANONICAL_STAGED_DIR_MODE = 0o755
+
+const DEFAULT_WINDOWS_PATHEXT = '.COM;.EXE;.BAT;.CMD'
+
+function isRegularFile(file) {
+  try {
+    return fs.statSync(file).isFile()
+  } catch {
+    return false
   }
-  return false
 }
 
+/**
+ * Default host-owned state root.
+ *
+ * - win32: <LOCALAPPDATA>\toadaid-agent-capabilities. HOME is not required and
+ *   XDG_STATE_HOME is never consulted (an inherited value from other tooling
+ *   must not redirect native Windows state). No LOCALAPPDATA -> refusal, which
+ *   only applies when no explicit --state-root is given.
+ * - every other platform: unchanged — HOME must be set; XDG_STATE_HOME, else
+ *   $HOME/.local/state, then /toadaid-agent-capabilities.
+ */
+export function resolveDefaultStateRoot({ platform, env }) {
+  if (platform === 'win32') {
+    const localAppData = env.LOCALAPPDATA ?? ''
+    if (localAppData === '') {
+      return { ok: false, reason: 'LOCALAPPDATA must be set on Windows unless --state-root is given' }
+    }
+    if (!path.win32.isAbsolute(localAppData)) {
+      return { ok: false, reason: 'LOCALAPPDATA must be an absolute path on Windows unless --state-root is given' }
+    }
+    return { ok: true, stateRoot: path.win32.join(localAppData, STATE_DIRECTORY_NAME) }
+  }
+  const home = env.HOME ?? ''
+  if (home === '') return { ok: false, reason: 'HOME must be set' }
+  const xdgStateHome = env.XDG_STATE_HOME ?? ''
+  return { ok: true, stateRoot: `${xdgStateHome !== '' ? xdgStateHome : `${home}/.local/state`}/${STATE_DIRECTORY_NAME}` }
+}
+
+/**
+ * Executable discovery (never invocation). POSIX: first PATH entry holding an
+ * executable regular file named `name`. win32: PATH x PATHEXT, exactly as
+ * native Windows resolves a bare command (extensionless shims and scripts whose
+ * extension is not in PATHEXT, such as npm.ps1, are not Windows executables).
+ * Returns the absolute path or null.
+ */
+export function resolveCommand(name, { platform, env }) {
+  const windows = platform === 'win32'
+  const directories = (env.PATH ?? '').split(windows ? ';' : ':')
+  const extensions = windows
+    ? (env.PATHEXT || DEFAULT_WINDOWS_PATHEXT).split(';').map((ext) => ext.trim().toLowerCase()).filter((ext) => ext.startsWith('.'))
+    : ['']
+  const ownExtension = path.extname(name).toLowerCase()
+  const names = windows
+    ? extensions.includes(ownExtension) ? [name] : extensions.map((ext) => `${name}${ext}`)
+    : [name]
+  for (const raw of directories) {
+    const dir = windows ? raw.trim().replace(/^"(.*)"$/, '$1') : raw
+    if (dir === '') continue
+    for (const candidateName of names) {
+      const candidate = path.join(dir, candidateName)
+      if (!isRegularFile(candidate)) continue
+      if (!windows) {
+        try {
+          fs.accessSync(candidate, fs.constants.X_OK)
+        } catch {
+          continue
+        }
+      }
+      return candidate
+    }
+  }
+  return null
+}
+
+/** Windows can CreateProcess these directly; .cmd/.bat would need a shell and are never executed. */
+export function isWindowsDirectExecutable(file) {
+  return typeof file === 'string' && /\.(exe|com)$/i.test(file)
+}
+
+/**
+ * Resolve npm's own JS entrypoint for a discovered Windows npm (npm.cmd sits
+ * in the Node.js directory next to node_modules\npm). Validated before use:
+ * the file must exist and belong to the package named "npm".
+ */
+export function locateWindowsNpmCli(npmPath) {
+  const reason = `cannot locate npm-cli.js for ${npmPath}; a standard Node.js npm installation is required on Windows`
+  if (typeof npmPath !== 'string' || npmPath === '') return { ok: false, reason }
+  let npmDir
+  try {
+    npmDir = path.dirname(fs.realpathSync(npmPath))
+  } catch {
+    return { ok: false, reason }
+  }
+  const npmPackageRoot = path.join(npmDir, 'node_modules', 'npm')
+  const cliPath = path.join(npmPackageRoot, 'bin', 'npm-cli.js')
+  if (!isRegularFile(cliPath)) return { ok: false, reason }
+  let npmPackage = null
+  try {
+    npmPackage = JSON.parse(fs.readFileSync(path.join(npmPackageRoot, 'package.json'), 'utf8'))
+  } catch {
+    npmPackage = null
+  }
+  if (npmPackage?.name !== 'npm' || typeof npmPackage?.version !== 'string') return { ok: false, reason }
+  return { ok: true, cliPath }
+}
+
+/**
+ * Give every staged directory and regular file the canonical mode, so the tar
+ * headers npm writes do not depend on the process umask or the platform.
+ * Anything else in the stage (symlinks, devices) is refused.
+ */
+export function normalizeStagedTree(directory) {
+  fs.chmodSync(directory, CANONICAL_STAGED_DIR_MODE)
+  for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+    const entryPath = path.join(directory, entry.name)
+    if (entry.isDirectory()) normalizeStagedTree(entryPath)
+    else if (entry.isFile()) fs.chmodSync(entryPath, CANONICAL_STAGED_FILE_MODE)
+    else throw new Error(`unexpected staged entry: ${entryPath}`)
+  }
+}
+
+let gitExecutable = 'git'
+
 function git(args, options = {}) {
-  return spawnSync('git', ['-C', REPO_ROOT, ...args], {
+  return spawnSync(gitExecutable, ['-C', REPO_ROOT, ...args], {
     encoding: options.encoding ?? 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
     maxBuffer: 64 * 1024 * 1024,
@@ -214,23 +333,31 @@ function parseArguments(argv, defaults) {
 function install(argv) {
   process.umask(0o077)
 
-  const home = process.env.HOME ?? ''
-  const xdgStateHome = process.env.XDG_STATE_HOME ?? ''
+  const platform = process.platform
+  const windows = platform === 'win32'
+  const defaultStateRoot = resolveDefaultStateRoot({ platform, env: process.env })
   const defaults = {
     profile: 'safe-observe',
-    stateRoot: `${xdgStateHome !== '' ? xdgStateHome : `${home}/.local/state`}/toadaid-agent-capabilities`,
+    stateRoot: '',
     artifactRoot: '',
     manifestPath: '',
     expectCommit: '',
     checkOnly: false,
   }
 
-  if (home === '') refuse('HOME must be set')
+  // POSIX (unchanged): HOME is required before anything else, even --help.
+  if (!windows && !defaultStateRoot.ok) refuse(defaultStateRoot.reason)
 
   const options = parseArguments(argv, defaults)
   if (options.help) {
     process.stdout.write(USAGE)
     return
+  }
+
+  // Precedence: explicit --state-root, else the platform default, else refuse.
+  if (options.stateRoot === '') {
+    if (!defaultStateRoot.ok) refuse(defaultStateRoot.reason)
+    options.stateRoot = defaultStateRoot.stateRoot
   }
 
   if (options.profile !== 'safe-observe') {
@@ -245,17 +372,39 @@ function install(argv) {
     expectedCommit = options.expectCommit.toLowerCase()
   }
 
+  // Discovery (where) is separate from invocation (how): nothing below ever
+  // executes a .cmd/.bat or goes through a shell.
+  const resolved = {}
   for (const command of ['git', 'npm']) {
-    if (!commandAvailable(command)) refuse(`required command unavailable: ${command}`)
+    resolved[command] = resolveCommand(command, { platform, env: process.env })
+    if (resolved[command] === null) refuse(`required command unavailable: ${command}`)
+  }
+  if (windows && !isWindowsDirectExecutable(resolved.git)) {
+    refuse(`git must resolve to a native executable on Windows: ${resolved.git}`)
+  }
+  gitExecutable = resolved.git
+
+  let npmLaunch = { file: resolved.npm, prefix: [] }
+  if (windows) {
+    const npmCli = locateWindowsNpmCli(resolved.npm)
+    if (!npmCli.ok) refuse(npmCli.reason)
+    npmLaunch = { file: process.execPath, prefix: [npmCli.cliPath] }
   }
 
   const [nodeMajor] = process.versions.node.split('.').map(Number)
   if (!(nodeMajor >= 22)) refuse('Node.js 22 or newer is required')
 
-  const tscBin = path.join(REPO_ROOT, 'node_modules', '.bin', 'tsc')
+  // The build dependency that must be present is the compiler JS that will
+  // actually run, through this Node, on every platform.
+  const typescriptRoot = path.join(REPO_ROOT, 'node_modules', 'typescript')
+  const tscScript = path.join(REPO_ROOT, 'node_modules', 'typescript', 'bin', 'tsc')
+  let typescriptPackage = null
   try {
-    fs.accessSync(tscBin, fs.constants.X_OK)
+    typescriptPackage = JSON.parse(fs.readFileSync(path.join(typescriptRoot, 'package.json'), 'utf8'))
   } catch {
+    typescriptPackage = null
+  }
+  if (!isRegularFile(tscScript) || typescriptPackage?.name !== 'typescript') {
     refuse('checkout build dependencies are missing; run npm ci --include=dev in the checkout first')
   }
 
@@ -379,8 +528,8 @@ function install(argv) {
     // packed) and would embed checkout-relative paths, so the artifact build
     // emits none. tsc output goes to stderr so stdout stays pure JSON.
     const build = spawnSync(
-      tscBin,
-      ['-p', 'tsconfig.build.json', '--outDir', path.join(stage, 'dist'), '--sourceMap', 'false'],
+      process.execPath,
+      [tscScript, '-p', 'tsconfig.build.json', '--outDir', path.join(stage, 'dist'), '--sourceMap', 'false'],
       { cwd: REPO_ROOT, stdio: ['ignore', process.stderr, process.stderr] },
     )
     if (build.status !== 0) refuse('out-of-tree TypeScript build failed')
@@ -397,7 +546,16 @@ function install(argv) {
       refuse('staged package export verification failed')
     }
 
-    const pack = spawnSync('npm', ['pack', stage, '--ignore-scripts', '--pack-destination', packOut, '--json'], {
+    // Canonical staged modes (files 0644, directories 0755) before packing:
+    // the staged tree was written under umask 077, and tar headers record the
+    // mode, so without this the artifact bytes would depend on the platform.
+    try {
+      normalizeStagedTree(stage)
+    } catch {
+      refuse('cannot normalize staged package modes')
+    }
+
+    const pack = spawnSync(npmLaunch.file, [...npmLaunch.prefix, 'pack', stage, '--ignore-scripts', '--pack-destination', packOut, '--json'], {
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'pipe'],
       maxBuffer: 64 * 1024 * 1024,
@@ -492,10 +650,22 @@ function install(argv) {
   }
 }
 
-try {
-  install(process.argv.slice(2))
-} catch (error) {
-  if (!(error instanceof Refusal)) throw error
-  process.stderr.write(`${PROGRAM}: ${error.message}\n`)
-  process.exitCode = 2
+function invokedDirectly() {
+  if (process.argv[1] === undefined) return false
+  try {
+    return fs.realpathSync(process.argv[1]) === fs.realpathSync(fileURLToPath(import.meta.url))
+  } catch {
+    return false
+  }
+}
+
+// Importing this module (tests, tooling) never runs the installer.
+if (invokedDirectly()) {
+  try {
+    install(process.argv.slice(2))
+  } catch (error) {
+    if (!(error instanceof Refusal)) throw error
+    process.stderr.write(`${PROGRAM}: ${error.message}\n`)
+    process.exitCode = 2
+  }
 }
